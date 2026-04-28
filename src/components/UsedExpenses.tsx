@@ -1,7 +1,11 @@
-import { useMemo, useState } from 'react'
-import { Search, X, Download } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Search, X, Download, Eye, Pencil, Trash2 } from 'lucide-react'
+import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import * as XLSX from 'xlsx'
 import NewExpenseModal from './NewExpenseModal'
+import ExpenseViewModal from './ExpenseViewModal'
+import DeleteConfirmModal from './DeleteConfirmModal'
 
 const EXPENSE_TYPES = [
   'all',
@@ -24,46 +28,68 @@ interface Expense {
 
 export default function UsedExpenses() {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [expenses, setExpenses] = useState<Expense[]>([
-    {
-      id: '1',
-      type: 'diesel',
-      amount: '120.50',
-      date: '2026-04-28',
-      notes: 'Fuel for delivery truck',
-    },
-    {
-      id: '2',
-      type: 'salary',
-      amount: '2500.00',
-      date: '2026-04-25',
-      notes: 'Monthly salary for warehouse staff',
-    },
-    {
-      id: '3',
-      type: 'rent',
-      amount: '800.00',
-      date: '2026-04-01',
-      notes: 'Office space rental',
-    },
-    {
-      id: '4',
-      type: 'food',
-      amount: '45.30',
-      date: '2026-04-27',
-      notes: 'Team lunch meeting',
-    },
-    {
-      id: '5',
-      type: 'cleaning maintenance',
-      amount: '150.00',
-      date: '2026-04-20',
-      notes: '',
-    },
-  ])
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleSaveExpense = (expense: Expense) => {
-    setExpenses((prev) => [...prev, expense])
+  // Real-time Firestore listener
+  useEffect(() => {
+    const q = query(collection(db, 'expenses'), orderBy('date', 'desc'))
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const expensesData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Expense[]
+      setExpenses(expensesData)
+      setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  const handleSaveExpense = async (expense: Omit<Expense, 'id'>) => {
+    await addDoc(collection(db, 'expenses'), {
+      type: expense.type,
+      amount: expense.amount,
+      date: expense.date,
+      notes: expense.notes,
+    })
+  }
+
+  const handleEditSave = async (expense: Omit<Expense, 'id'>) => {
+    if (selectedExpense) {
+      await updateDoc(doc(db, 'expenses', selectedExpense.id), {
+        type: expense.type,
+        amount: expense.amount,
+        date: expense.date,
+        notes: expense.notes,
+      })
+    }
+  }
+
+  const handleView = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsViewModalOpen(true)
+  }
+
+  const handleEdit = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsEditModalOpen(true)
+  }
+
+  const handleDelete = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsDeleteModalOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (selectedExpense) {
+      await deleteDoc(doc(db, 'expenses', selectedExpense.id))
+    }
+    setIsDeleteModalOpen(false)
+    setSelectedExpense(null)
   }
 
   // Search and filter states
@@ -292,7 +318,11 @@ export default function UsedExpenses() {
         )}
       </div>
 
-      {filteredExpenses.length === 0 ? (
+      {loading ? (
+        <div className="border rounded-lg p-6">
+          <p className="text-sm">Loading expenses...</p>
+        </div>
+      ) : filteredExpenses.length === 0 ? (
         <div className="border rounded-lg p-6">
           <p className="text-sm">
             {expenses.length === 0
@@ -310,6 +340,7 @@ export default function UsedExpenses() {
                   <th className="text-left px-4 py-3 text-sm font-semibold">Amount</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold">Date</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold">Notes</th>
+                  <th className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -319,6 +350,34 @@ export default function UsedExpenses() {
                     <td className="px-4 py-3 text-sm">${expense.amount}</td>
                     <td className="px-4 py-3 text-sm">{expense.date}</td>
                     <td className="px-4 py-3 text-sm max-w-xs truncate">{expense.notes || '-'}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleView(expense)}
+                          className="p-1.5 rounded transition-colors"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(expense)}
+                          className="p-1.5 rounded transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(expense)}
+                          className="p-1.5 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -383,6 +442,36 @@ export default function UsedExpenses() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveExpense}
+      />
+
+      <NewExpenseModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setSelectedExpense(null)
+        }}
+        editExpense={selectedExpense}
+        onSave={handleEditSave}
+      />
+
+      <ExpenseViewModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false)
+          setSelectedExpense(null)
+        }}
+        expense={selectedExpense}
+      />
+
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false)
+          setSelectedExpense(null)
+        }}
+        onConfirm={confirmDelete}
+        title="Delete Expense"
+        itemName={selectedExpense ? `${selectedExpense.type} - $${selectedExpense.amount}` : ''}
       />
     </section>
   )

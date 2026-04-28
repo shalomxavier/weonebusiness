@@ -1,6 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Trash2, Clock, CheckCircle2, Search, X } from 'lucide-react'
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import NewRemovalModal from './NewRemovalModal'
+import RemovalViewModal from './RemovalViewModal'
+import DeleteConfirmModal from './DeleteConfirmModal'
 
 interface RemovalOrder {
   id: string
@@ -20,60 +34,76 @@ interface RemovalOrder {
 }
 
 export default function RemovalsOrders() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [orders, setOrders] = useState<RemovalOrder[]>([
-    {
-      id: '1',
-      customerName: 'John Doe',
-      email: 'john@example.com',
-      phone: '555-0123',
-      postcode: '12345',
-      address: '123 Main St',
-      notes: 'Ground floor access',
-      removalDate: '2026-04-30',
-      totalPrice: '350.00',
-      advance: '100.00',
-      startTime: '09:00',
-      endTime: '11:00',
-      paymentMethod: 'card',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      customerName: 'Jane Smith',
-      email: 'jane@example.com',
-      phone: '555-0456',
-      postcode: '67890',
-      address: '456 Oak Ave',
-      notes: '',
-      removalDate: '2026-04-28',
-      totalPrice: '500.00',
-      advance: '150.00',
-      startTime: '14:00',
-      endTime: '16:00',
-      paymentMethod: 'cash',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      customerName: 'Bob Johnson',
-      email: 'bob@example.com',
-      phone: '555-0789',
-      postcode: '54321',
-      address: '789 Pine Rd',
-      notes: 'Heavy items',
-      removalDate: '2026-05-02',
-      totalPrice: '275.00',
-      advance: '50.00',
-      startTime: '10:00',
-      endTime: '12:00',
-      paymentMethod: 'both',
-      status: 'pending',
-    },
-  ])
+  const [orders, setOrders] = useState<RemovalOrder[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleSaveOrder = (order: RemovalOrder) => {
-    setOrders((prev) => [...prev, order])
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<RemovalOrder | null>(null)
+
+  useEffect(() => {
+    const q = query(collection(db, 'removalOrders'), orderBy('createdAt', 'desc'))
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data: RemovalOrder[] = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<RemovalOrder, 'id'>),
+        }))
+        setOrders(data)
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Error fetching removal orders:', error)
+        setLoading(false)
+      }
+    )
+    return () => unsubscribe()
+  }, [])
+
+  const handleView = (order: RemovalOrder) => {
+    setSelectedOrder(order)
+    setIsViewModalOpen(true)
+  }
+
+  const handleEdit = (order: RemovalOrder) => {
+    setSelectedOrder(order)
+    setIsEditModalOpen(true)
+  }
+
+  const handleDelete = (order: RemovalOrder) => {
+    setSelectedOrder(order)
+    setIsDeleteModalOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (selectedOrder) {
+      try {
+        await deleteDoc(doc(db, 'removalOrders', selectedOrder.id))
+      } catch (error) {
+        console.error('Error deleting removal order:', error)
+      }
+    }
+    setIsDeleteModalOpen(false)
+    setSelectedOrder(null)
+  }
+
+  const handleSaveOrder = async (order: RemovalOrder) => {
+    const { id, ...orderData } = order
+    try {
+      if (orders.find((o) => o.id === id)) {
+        await updateDoc(doc(db, 'removalOrders', id), orderData)
+      } else {
+        await addDoc(collection(db, 'removalOrders'), {
+          ...orderData,
+          createdAt: serverTimestamp(),
+        })
+      }
+    } catch (error) {
+      console.error('Error saving removal order:', error)
+    }
   }
 
   // Search and filter states
@@ -147,7 +177,7 @@ export default function RemovalsOrders() {
         <button
           type="button"
           className="btn border"
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => setIsCreateModalOpen(true)}
         >
           New Removal
         </button>
@@ -238,6 +268,8 @@ export default function RemovalsOrders() {
         )}
       </div>
 
+      {loading && <p className="text-sm text-gray-500">Loading orders...</p>}
+
       {/* Results count */}
       <div className="text-sm text-gray-500">
         {!showAll && filteredOrders.length > INITIAL_DISPLAY_LIMIT
@@ -291,6 +323,7 @@ export default function RemovalsOrders() {
                           type="button"
                           className="p-1.5 rounded transition-colors"
                           title="View"
+                          onClick={() => handleView(order)}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
@@ -298,6 +331,7 @@ export default function RemovalsOrders() {
                           type="button"
                           className="p-1.5 rounded transition-colors"
                           title="Edit"
+                          onClick={() => handleEdit(order)}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -305,6 +339,7 @@ export default function RemovalsOrders() {
                           type="button"
                           className="p-1.5 rounded transition-colors"
                           title="Delete"
+                          onClick={() => handleDelete(order)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -370,10 +405,45 @@ export default function RemovalsOrders() {
         </div>
       )}
 
+      {/* Create Modal */}
       <NewRemovalModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
         onSave={handleSaveOrder}
+      />
+
+      {/* View Modal */}
+      <RemovalViewModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false)
+          setSelectedOrder(null)
+        }}
+        order={selectedOrder}
+      />
+
+      {/* Edit Modal */}
+      <NewRemovalModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setSelectedOrder(null)
+        }}
+        onSave={handleSaveOrder}
+        editRemoval={selectedOrder ? (({ id: _id, ...rest }) => rest)(selectedOrder) : null}
+        editId={selectedOrder?.id ?? null}
+      />
+
+      {/* Delete Modal */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false)
+          setSelectedOrder(null)
+        }}
+        onConfirm={confirmDelete}
+        title="Delete Removal Order"
+        itemName={selectedOrder?.customerName}
       />
     </section>
   )

@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 
 interface RemovalOrder {
   id: string
@@ -22,6 +22,8 @@ interface NewRemovalModalProps {
   isOpen: boolean
   onClose: () => void
   onSave?: (order: RemovalOrder) => void
+  editRemoval?: Omit<RemovalOrder, 'id'> | null
+  editId?: string | null
 }
 
 const PAYMENT_METHODS = [
@@ -39,7 +41,7 @@ function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-export default function NewRemovalModal({ isOpen, onClose, onSave }: NewRemovalModalProps) {
+export default function NewRemovalModal({ isOpen, onClose, onSave, editRemoval, editId }: NewRemovalModalProps) {
   const [formData, setFormData] = useState<Omit<RemovalOrder, 'id'>>({
     customerName: '',
     email: '',
@@ -56,11 +58,33 @@ export default function NewRemovalModal({ isOpen, onClose, onSave }: NewRemovalM
     status: 'pending',
   })
 
+  useEffect(() => {
+    if (editRemoval) {
+      setFormData(editRemoval)
+    } else {
+      setFormData({
+        customerName: '',
+        email: '',
+        phone: '',
+        postcode: '',
+        address: '',
+        notes: '',
+        removalDate: getTodayDate(),
+        totalPrice: '',
+        advance: '',
+        startTime: '',
+        endTime: '',
+        paymentMethod: 'card',
+        status: 'pending',
+      })
+    }
+  }, [editRemoval, isOpen])
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const orderData = {
       ...formData,
-      id: Date.now().toString(),
+      id: editId ?? Date.now().toString(),
     } as RemovalOrder
     if (onSave) {
       onSave(orderData)
@@ -98,7 +122,7 @@ export default function NewRemovalModal({ isOpen, onClose, onSave }: NewRemovalM
 
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto card">
         <div className="sticky top-0 flex items-center justify-between pb-4 border-b mb-6">
-          <h2 className="text-2xl font-semibold">New Removal</h2>
+          <h2 className="text-2xl font-semibold">{editId ? 'Edit Removal' : 'New Removal'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -330,7 +354,7 @@ export default function NewRemovalModal({ isOpen, onClose, onSave }: NewRemovalM
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Save Removal
+              {editId ? 'Update Removal' : 'Save Removal'}
             </button>
           </div>
         </form>

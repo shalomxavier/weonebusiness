@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - any authenticated user can CRUD
+    match /users/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Orders collection - any authenticated user can CRUD
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Pickups collection - any authenticated user can CRUD
+    match /pickups/{pickupId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Expenses collection - any authenticated user can CRUD
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Removal Orders collection - any authenticated user can CRUD
+    match /removalOrders/{orderId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

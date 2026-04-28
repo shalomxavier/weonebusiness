@@ -21,10 +21,11 @@ interface NewPickupModalProps {
   isOpen: boolean
   onClose: () => void
   editPickup?: PickupData | null
+  editId?: string | null
   onSave?: (pickup: PickupData & { id: string }) => void
 }
 
-export default function NewPickupModal({ isOpen, onClose, editPickup, onSave }: NewPickupModalProps) {
+export default function NewPickupModal({ isOpen, onClose, editPickup, editId, onSave }: NewPickupModalProps) {
   const [formData, setFormData] = useState<PickupData>({
     pickupNumber: '',
     itemName: '',
@@ -80,7 +81,7 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, onSave }: 
     event.preventDefault()
     const pickupRecord = {
       ...formData,
-      id: editPickup ? editPickup.pickupNumber : Date.now().toString(),
+      id: editId || Date.now().toString(),
     }
 
     if (onSave) {

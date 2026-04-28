@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 
 interface Expense {
   id: string
@@ -12,7 +12,8 @@ interface Expense {
 interface NewExpenseModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave?: (expense: Expense) => void
+  onSave?: (expense: Omit<Expense, 'id'>) => void
+  editExpense?: Expense | null
 }
 
 const EXPENSE_TYPES = [
@@ -29,7 +30,7 @@ function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseModalProps) {
+export default function NewExpenseModal({ isOpen, onClose, onSave, editExpense }: NewExpenseModalProps) {
   const [formData, setFormData] = useState<Omit<Expense, 'id'>>({
     type: '',
     amount: '',
@@ -37,14 +38,28 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
     notes: '',
   })
 
+  useEffect(() => {
+    if (editExpense) {
+      setFormData({
+        type: editExpense.type,
+        amount: editExpense.amount,
+        date: editExpense.date,
+        notes: editExpense.notes,
+      })
+    } else {
+      setFormData({
+        type: '',
+        amount: '',
+        date: getTodayDate(),
+        notes: '',
+      })
+    }
+  }, [editExpense])
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const expenseData = {
-      ...formData,
-      id: Date.now().toString(),
-    } as Expense
     if (onSave) {
-      onSave(expenseData)
+      onSave(formData)
     }
     onClose()
     setFormData({
@@ -70,7 +85,7 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
 
       <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto card">
         <div className="sticky top-0 flex items-center justify-between pb-4 border-b mb-6">
-          <h2 className="text-2xl font-semibold">New Expense</h2>
+          <h2 className="text-2xl font-semibold">{editExpense ? 'Edit Expense' : 'New Expense'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -162,7 +177,7 @@ export default function NewExpenseModal({ isOpen, onClose, onSave }: NewExpenseM
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Save Expense
+              {editExpense ? 'Update Expense' : 'Save Expense'}
             </button>
           </div>
         </form>

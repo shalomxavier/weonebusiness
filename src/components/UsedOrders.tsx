@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X } from 'lucide-react'
+import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import NewOrderModal from './NewOrderModal'
 import OrderViewModal from './OrderViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -22,40 +24,22 @@ interface Order {
 }
 
 export default function UsedOrders() {
-  const [orders, setOrders] = useState<Order[]>([
-    {
-      id: '1',
-      itemNumber: 'ITM-001',
-      itemName: 'Vintage Sofa',
-      price: '500',
-      advance: '100',
-      customerName: 'John Doe',
-      phone: '555-0123',
-      address: '123 Main St',
-      postcode: '12345',
-      deliveryDate: '2026-04-25',
-      deliveryStartTime: '10:00',
-      deliveryEndTime: '12:00',
-      additionalNotes: 'Handle with care',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      itemNumber: 'ITM-002',
-      itemName: 'Dining Table Set',
-      price: '800',
-      advance: '200',
-      customerName: 'Jane Smith',
-      phone: '555-0456',
-      address: '456 Oak Ave',
-      postcode: '67890',
-      deliveryDate: '2026-04-26',
-      deliveryStartTime: '14:00',
-      deliveryEndTime: '16:00',
-      additionalNotes: '',
-      status: 'pending',
-    },
-  ])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Real-time Firestore listener
+  useEffect(() => {
+    const q = query(collection(db, 'orders'), orderBy('deliveryDate', 'desc'))
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const ordersData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Order[]
+      setOrders(ordersData)
+      setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [])
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -140,22 +124,21 @@ export default function UsedOrders() {
     setIsDeleteModalOpen(true)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedOrder) {
-      setOrders(orders.filter((o) => o.id !== selectedOrder.id))
+      await deleteDoc(doc(db, 'orders', selectedOrder.id))
     }
     setIsDeleteModalOpen(false)
     setSelectedOrder(null)
   }
 
-  const handleSaveOrder = (order: Order) => {
-    const existingIndex = orders.findIndex((o) => o.id === order.id)
+  const handleSaveOrder = async (order: Order) => {
+    const { id, ...orderData } = order
+    const existingIndex = orders.findIndex((o) => o.id === id)
     if (existingIndex >= 0) {
-      const updatedOrders = [...orders]
-      updatedOrders[existingIndex] = order
-      setOrders(updatedOrders)
+      await updateDoc(doc(db, 'orders', id), orderData)
     } else {
-      setOrders([...orders, order])
+      await addDoc(collection(db, 'orders'), orderData)
     }
   }
 

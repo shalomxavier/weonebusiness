@@ -1,5 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X } from 'lucide-react'
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import NewPickupModal from './NewPickupModal'
 import PickupViewModal from './PickupViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -22,40 +34,8 @@ interface Pickup {
 }
 
 export default function UsedPickups() {
-  const [pickups, setPickups] = useState<Pickup[]>([
-    {
-      id: '1',
-      pickupNumber: 'PKP-001',
-      itemName: 'Vintage Wardrobe',
-      price: '350',
-      advance: '50',
-      customerName: 'Alice Brown',
-      phone: '555-1001',
-      address: '10 Elm Street',
-      postcode: 'AB1 2CD',
-      pickupDate: '2026-04-28',
-      pickupStartTime: '09:00',
-      pickupEndTime: '11:00',
-      additionalNotes: 'Large item, bring extra help',
-      status: 'pending',
-    },
-    {
-      id: '2',
-      pickupNumber: 'PKP-002',
-      itemName: 'Oak Bookshelf',
-      price: '120',
-      advance: '',
-      customerName: 'Bob Carter',
-      phone: '555-2002',
-      address: '22 Maple Ave',
-      postcode: 'EF3 4GH',
-      pickupDate: '2026-04-29',
-      pickupStartTime: '13:00',
-      pickupEndTime: '14:00',
-      additionalNotes: '',
-      status: 'collected',
-    },
-  ])
+  const [pickups, setPickups] = useState<Pickup[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -68,6 +48,27 @@ export default function UsedPickups() {
   const [dateFilter, setDateFilter] = useState('')
   const [sortBy, setSortBy] = useState<'pickupDate' | 'customerName' | 'itemName' | 'price'>('pickupDate')
   const [sortOrder] = useState<'asc' | 'desc'>('asc')
+
+  // Realtime Firestore subscription
+  useEffect(() => {
+    const pickupsQuery = query(collection(db, 'pickups'), orderBy('createdAt', 'desc'))
+    const unsubscribe = onSnapshot(
+      pickupsQuery,
+      (snapshot) => {
+        const pickupsData: Pickup[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as Omit<Pickup, 'id'>),
+        }))
+        setPickups(pickupsData)
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Error fetching pickups:', error)
+        setLoading(false)
+      }
+    )
+    return () => unsubscribe()
+  }, [])
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -156,22 +157,33 @@ export default function UsedPickups() {
     setIsDeleteModalOpen(true)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedPickup) {
-      setPickups(pickups.filter((p) => p.id !== selectedPickup.id))
+      try {
+        await deleteDoc(doc(db, 'pickups', selectedPickup.id))
+      } catch (error) {
+        console.error('Error deleting pickup:', error)
+      }
     }
     setIsDeleteModalOpen(false)
     setSelectedPickup(null)
   }
 
-  const handleSavePickup = (pickup: Pickup) => {
-    const existingIndex = pickups.findIndex((p) => p.id === pickup.id)
-    if (existingIndex >= 0) {
-      const updated = [...pickups]
-      updated[existingIndex] = pickup
-      setPickups(updated)
-    } else {
-      setPickups([...pickups, pickup])
+  const handleSavePickup = async (pickup: Pickup) => {
+    const { id, ...pickupData } = pickup
+    try {
+      if (pickups.find((p) => p.id === id)) {
+        // Update existing
+        await updateDoc(doc(db, 'pickups', id), pickupData)
+      } else {
+        // Create new
+        await addDoc(collection(db, 'pickups'), {
+          ...pickupData,
+          createdAt: serverTimestamp(),
+        })
+      }
+    } catch (error) {
+      console.error('Error saving pickup:', error)
     }
   }
 
@@ -301,7 +313,11 @@ export default function UsedPickups() {
           : `Showing ${filteredPickups.length} of ${pickups.length} pickups`}
       </div>
 
-      {filteredPickups.length === 0 ? (
+      {loading ? (
+        <div className="border rounded-lg p-6">
+          <p className="text-sm text-gray-500">Loading pickups...</p>
+        </div>
+      ) : filteredPickups.length === 0 ? (
         <div className="border rounded-lg p-6">
           <p className="text-sm">
             {pickups.length === 0
@@ -436,6 +452,7 @@ export default function UsedPickups() {
           setSelectedPickup(null)
         }}
         editPickup={selectedPickup}
+        editId={selectedPickup?.id || null}
         onSave={handleSavePickup}
       />
 
