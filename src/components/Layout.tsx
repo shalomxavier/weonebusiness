@@ -48,25 +48,25 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen text-white">
+    <div className="min-h-screen lg:flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-black/90 backdrop-blur-sm shadow-lg border-r border-white/10 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col
+        fixed inset-y-0 left-0 z-50 w-72 backdrop-blur-sm border-r transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <div className="relative flex items-center h-16 px-6 border-b border-white/10">
-          <h1 className="mx-auto text-2xl font-semibold text-white">WeOne</h1>
+        <div className="relative flex items-center h-16 px-6 border-b">
+          <h1 className="mx-auto text-2xl font-semibold">WeOne</h1>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="absolute right-6 lg:hidden p-2 rounded-md text-white/60 hover:text-white hover:bg-white/10"
+            className="absolute right-6 lg:hidden p-2 rounded-md"
           >
             <X className="w-5 h-5" />
           </button>
@@ -77,27 +77,27 @@ export default function Layout() {
             const isOpen = openSections[section.id]
 
             return (
-              <div key={section.id} className="border-b border-white/10 last:border-b-0">
+              <div key={section.id} className="border-b last:border-b-0">
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-3 px-2 py-4 text-left text-base text-white transition-colors hover:bg-white/10"
+                  className="flex w-full items-center justify-between gap-3 px-2 py-4 text-left text-base"
                   onClick={() => toggleSection(section.id)}
                   aria-expanded={isOpen}
                   aria-controls={`${section.id}-items`}
                 >
                   <div>
-                    <p className="text-lg font-semibold text-white tracking-wide">{section.title}</p>
+                    <p className="text-lg font-semibold tracking-wide">{section.title}</p>
                   </div>
                   {isOpen ? (
-                    <ChevronDown className="h-4 w-4 text-white/60" />
+                    <ChevronDown className="h-4 w-4" />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-white/60" />
+                    <ChevronRight className="h-4 w-4" />
                   )}
                 </button>
                 {isOpen && (
                   <ul
                     id={`${section.id}-items`}
-                    className="px-6 pb-4 space-y-1 text-base text-white/80"
+                    className="px-6 pb-4 space-y-1 text-base"
                   >
                     {section.items.map((item) => (
                       <li key={item.id}>
@@ -121,9 +121,7 @@ export default function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-72">
-        <Outlet />
-      </div>
+      <Outlet />
     </div>
   )
 }

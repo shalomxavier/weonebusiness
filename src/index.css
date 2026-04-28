@@ -3,36 +3,25 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-white/10;
-  }
   body {
-    @apply bg-black text-white antialiased;
+    @apply antialiased;
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
   }
-  
-  .btn-primary {
-    @apply bg-white text-black hover:bg-white/80 focus:ring-white/40;
-  }
-  
-  .btn-secondary {
-    @apply bg-white/10 text-white hover:bg-white/20 focus:ring-white/40;
-  }
-  
+
   .card {
-    @apply bg-black rounded-xl shadow-sm border border-white/10 p-6 text-white;
+    @apply rounded-xl border p-6;
   }
-  
+
   .sidebar-item {
-    @apply flex items-center px-3 py-2 rounded-lg text-white/80 hover:bg-white/10 hover:text-white transition-colors;
+    @apply flex items-center px-3 py-2 rounded-lg transition-colors;
   }
-  
+
   .sidebar-item.active {
-    @apply bg-white/20 text-white hover:bg-white/25;
+    @apply font-semibold;
   }
 }

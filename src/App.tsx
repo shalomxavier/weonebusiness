@@ -1,8 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout.tsx'
 import Dashboard from './components/Dashboard.tsx'
-
-const Blank = () => <div className="p-8 text-white/70">Coming soon...</div>
+import UsedOrders from './components/UsedOrders.tsx'
+import UsedPickups from './components/UsedPickups.tsx'
+import UsedExpenses from './components/UsedExpenses.tsx'
+import RemovalsOrders from './components/RemovalsOrders.tsx'
+import UserManage from './components/UserManage.tsx'
 
 function App() {
   return (
@@ -10,11 +13,11 @@ function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="used/orders" element={<Blank />} />
-          <Route path="used/pickups" element={<Blank />} />
-          <Route path="used/expenses" element={<Blank />} />
-          <Route path="removals/orders" element={<Blank />} />
-          <Route path="users/manage" element={<Blank />} />
+          <Route path="used/orders" element={<UsedOrders />} />
+          <Route path="used/pickups" element={<UsedPickups />} />
+          <Route path="used/expenses" element={<UsedExpenses />} />
+          <Route path="removals/orders" element={<RemovalsOrders />} />
+          <Route path="users/manage" element={<UserManage />} />
         </Route>
       </Routes>
     </BrowserRouter>
