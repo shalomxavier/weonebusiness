@@ -20,16 +20,16 @@ function App() {
             <LightPillar
               topColor="#5227FF"
               bottomColor="#FF9FFC"
-              intensity={1}
+              intensity={1.5}
               rotationSpeed={0.3}
-              glowAmount={0.002}
+              glowAmount={0.001}
               pillarWidth={3}
               pillarHeight={0.4}
-              noiseIntensity={0.5}
+              noiseIntensity={0.2}
               pillarRotation={25}
               interactive={false}
               mixBlendMode="screen"
-              quality="high"
+              quality="low"
             />
           </div>
           <div className="relative z-10">
