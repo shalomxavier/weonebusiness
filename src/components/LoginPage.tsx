@@ -43,7 +43,6 @@ export default function LoginPage() {
       navigate(from, { replace: true })
     } catch (err) {
       setError('Invalid email or password.')
-    } finally {
       setLoading(false)
     }
   }
@@ -104,7 +103,9 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="btn border border-white/20 w-full gap-2 justify-center rounded-xl bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(255,20,147,0.5)] transition-all duration-200 bg-[length:200%_100%] hover:bg-[position:100%_0]"
+            style={{ outline: 'none', boxShadow: 'none' }}
+            onMouseDown={(e) => e.preventDefault()}
+            className="border border-white/20 w-full gap-2 justify-center rounded-xl bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(255,20,147,0.5)] transition-all duration-200 bg-[length:200%_100%] hover:bg-[position:100%_0] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 py-2.5 px-4 font-medium"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

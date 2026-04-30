@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -38,6 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Use ref to communicate between listener and login function
+  const loginResolveRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -56,6 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null)
       }
       setLoading(false)
+      // Resolve pending login if any
+      if (loginResolveRef.current) {
+        loginResolveRef.current()
+        loginResolveRef.current = null
+      }
     })
 
     return unsubscribe
@@ -65,7 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       await signInWithEmailAndPassword(auth, email, password)
+      // Wait for the auth state listener to complete (it calls loginResolveRef when done)
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          loginResolveRef.current = null
+          reject(new Error('Login timeout - auth state did not update'))
+        }, 10000)
+
+        loginResolveRef.current = () => {
+          clearTimeout(timeout)
+          resolve()
+        }
+      })
     } catch (err) {
+      loginResolveRef.current = null
       const errorMessage = err instanceof Error ? err.message : 'Login failed'
       setError(errorMessage)
       throw new Error(errorMessage)
