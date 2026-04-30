@@ -202,7 +202,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-[#0f0f0f] rounded-r-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-none lg:h-screen
+        fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border-r border-white/10 rounded-r-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-none lg:h-screen
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="relative flex items-center h-16 px-6 mt-8">

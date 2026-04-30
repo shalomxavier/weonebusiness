@@ -1,10 +1,10 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Eye, EyeOff, LogIn } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, resetPassword } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -15,6 +15,23 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetMsg, setResetMsg] = useState('')
+
+  const handleForgotPassword = async () => {
+    const target = email.trim()
+    if (!target) {
+      setError('Enter your email above, then click Forgot password.')
+      return
+    }
+    setError('')
+    setResetMsg('')
+    try {
+      await resetPassword(target)
+      setResetMsg('Password reset email sent. Check your inbox.')
+    } catch {
+      setError('Failed to send reset email. Check the address and try again.')
+    }
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -32,16 +49,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-8">
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-semibold text-white">WeOne</h1>
-          <p className="text-sm text-gray-400">Sign in to your account</p>
-        </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <h1 className="text-4xl font-bold text-white mb-8">WeOne</h1>
+      <div className="w-full max-w-md bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 p-10 shadow-2xl space-y-6">
+        <p className="text-base text-gray-400 text-center">Sign in to your account</p>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1">
-            <label htmlFor="email" className="block text-sm font-medium text-gray-200">
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-1 mb-5">
+            <label htmlFor="email" className="block text-base font-medium text-gray-200">
               Email
             </label>
             <input
@@ -51,12 +66,12 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-white/20 rounded-lg text-sm bg-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
+              className="w-full px-3 py-2.5 border border-white/20 rounded-xl text-base bg-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
             />
           </div>
 
-          <div className="space-y-1">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-200">
+          <div className="space-y-1 mb-[30px]">
+            <label htmlFor="password" className="block text-base font-medium text-gray-200">
               Password
             </label>
             <div className="relative">
@@ -67,7 +82,7 @@ export default function LoginPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 pr-10 border border-white/20 rounded-lg text-sm bg-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
+                className="w-full px-3 py-2.5 pr-10 border border-white/20 rounded-xl text-base bg-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
                 />
               <button
                 type="button"
@@ -75,13 +90,13 @@ export default function LoginPage() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg px-3 py-2">
+            <p className="text-base text-red-400 text-center mb-5">
               {error}
             </p>
           )}
@@ -89,11 +104,20 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="btn border w-full gap-2 justify-center"
+            className="btn border border-white/20 w-full gap-2 justify-center rounded-xl bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(255,20,147,0.5)] transition-all duration-200 bg-[length:200%_100%] hover:bg-[position:100%_0]"
           >
-            <LogIn className="w-4 h-4" />
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
+
+          <p className="text-center mt-3 text-sm text-gray-400">
+            <button type="button" onClick={handleForgotPassword} className="text-gray-400 hover:text-gray-300 transition-colors duration-150">
+              Forgot password?
+            </button>
+          </p>
+
+          {resetMsg && (
+            <p className="text-center mt-2 text-sm text-gray-400">{resetMsg}</p>
+          )}
         </form>
       </div>
     </div>

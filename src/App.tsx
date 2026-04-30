@@ -21,15 +21,15 @@ function App() {
               topColor="#5227FF"
               bottomColor="#FF9FFC"
               intensity={1.5}
-              rotationSpeed={0.3}
+              rotationSpeed={0.9}
               glowAmount={0.001}
-              pillarWidth={3}
-              pillarHeight={0.4}
-              noiseIntensity={0.2}
-              pillarRotation={25}
-              interactive={false}
+              pillarWidth={2}
+              pillarHeight={0.3}
+              noiseIntensity={0.03}
+              pillarRotation={100}
+              interactive={true}
               mixBlendMode="screen"
-              quality="low"
+              quality="medium"
             />
           </div>
           <div className="relative z-10">
