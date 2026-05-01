@@ -109,7 +109,7 @@ function SidebarSection({
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm ${
                     isActive
-                      ? 'bg-[#D946EF] text-white font-medium'
+                      ? 'bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white font-medium'
                       : 'text-gray-400 transition-none hover:text-white hover:bg-white/10'
                   }`
                 }
@@ -202,11 +202,11 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border-r border-white/10 rounded-r-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-none lg:h-screen
+        fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-3xl
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="relative flex items-center h-16 px-6 mt-8">
-          <h1 className="mx-auto text-3xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF9FFC] bg-clip-text text-transparent">WeOne</h1>
+          <h1 className="mx-auto text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF9FFC] bg-clip-text text-transparent">WeOne</h1>
           <button
             onClick={() => setSidebarOpen(false)}
             className="absolute right-6 lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
