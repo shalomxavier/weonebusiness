@@ -306,7 +306,7 @@ export default function UsedOrders() {
           <p className="text-sm font-semibold tracking-widest">Used Goods</p>
           <h1 className="text-4xl font-semibold leading-tight">Orders</h1>
         </header>
-        <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-4 py-2.5 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-sm font-medium hover:bg-white/10 transition-colors">
+        <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-4 py-2.5 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-sm font-medium hover:bg-white/10 transition-colors border border-white/10">
           New Order
         </button>
       </div>
