@@ -13,6 +13,7 @@ export interface AuthUser {
   uid: string
   email: string | null
   displayName: string | null
+  role: string | null
 }
 
 interface AuthContextType {
@@ -31,6 +32,7 @@ function mapFirebaseUser(user: FirebaseUser): AuthUser {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName,
+    role: null,
   }
 }
 
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const snap = await getDoc(doc(db, 'users', firebaseUser.uid))
           if (snap.exists()) {
             base.displayName = snap.data().name ?? base.displayName
+            base.role = snap.data().role ?? base.role
           }
         } catch {
           // fall back to Firebase Auth displayName

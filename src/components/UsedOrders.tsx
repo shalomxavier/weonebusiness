@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import NewOrderModal from './NewOrderModal'
 import OrderViewModal from './OrderViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
+import ExportModal from './ExportModal'
+import * as XLSX from 'xlsx'
 
 interface Order {
   id: string
@@ -203,6 +205,7 @@ export default function UsedOrders() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
   // Search, filter, and sort states
   const [searchQuery, setSearchQuery] = useState('')
@@ -244,6 +247,73 @@ export default function UsedOrders() {
 
     return result
   }, [orders, searchQuery, statusFilter, dateFilter])
+
+  // Export to Excel
+  const handleExport = (month: number, year: number) => {
+    // Filter orders by selected month and year
+    const monthOrders = orders.filter(order => {
+      const orderDate = new Date(order.deliveryDate)
+      return orderDate.getMonth() === month && orderDate.getFullYear() === year
+    })
+
+    // Prepare order data for export
+    const orderData = monthOrders.map((order, index) => ({
+      'No.': index + 1,
+      'Item Number': order.itemNumber,
+      'Item Name': order.itemName,
+      'Price': parseFloat(order.price),
+      'Advance': parseFloat(order.advance),
+      'Balance': parseFloat(order.price) - parseFloat(order.advance),
+      'Customer Name': order.customerName,
+      'Phone': order.phone,
+      'Address': order.address,
+      'Postcode': order.postcode,
+      'Delivery Date': order.deliveryDate,
+      'Delivery Time': `${order.deliveryStartTime} - ${order.deliveryEndTime}`,
+      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
+      'Notes': order.additionalNotes || '-',
+    }))
+
+    // Calculate totals for the selected month
+    const monthlyTotal = monthOrders.reduce((sum, order) => sum + parseFloat(order.price), 0)
+    const monthlyAdvance = monthOrders.reduce((sum, order) => sum + parseFloat(order.advance), 0)
+    const monthlyBalance = monthlyTotal - monthlyAdvance
+    const pendingCount = monthOrders.filter(o => o.status === 'pending').length
+    const deliveredCount = monthOrders.filter(o => o.status === 'delivered').length
+    const cancelledCount = monthOrders.filter(o => o.status === 'cancelled').length
+
+    // Prepare summary data
+    const summaryData = [
+      ['Order Summary', ''],
+      ['Total Orders', monthOrders.length],
+      ['Pending', pendingCount],
+      ['Delivered', deliveredCount],
+      ['Cancelled', cancelledCount],
+      ['', ''],
+      ['Financial Summary', ''],
+      ['Total Revenue', monthlyTotal],
+      ['Total Advance', monthlyAdvance],
+      ['Total Balance', monthlyBalance],
+    ]
+
+    // Create workbook
+    const wb = XLSX.utils.book_new()
+
+    // Create orders sheet
+    const wsOrders = XLSX.utils.json_to_sheet(orderData)
+    XLSX.utils.book_append_sheet(wb, wsOrders, 'Orders')
+
+    // Create summary sheet
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+
+    // Generate filename with month and year
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const filename = `Orders_${monthNames[month]}_${year}.xlsx`
+
+    // Download file
+    XLSX.writeFile(wb, filename)
+  }
 
   // Clear all filters
   const clearFilters = () => {
@@ -301,17 +371,27 @@ export default function UsedOrders() {
 
   return (
     <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
           <p className="text-sm font-semibold tracking-widest">Used Goods</p>
           <h1 className="text-4xl font-semibold leading-tight">Orders</h1>
         </header>
-        <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-4 py-2.5 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-sm font-medium hover:bg-white/10 transition-colors border border-white/10">
-          New Order
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+            title="Export to Excel"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
+            New Order
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
           <div className="flex flex-col gap-2 justify-center">
             <p className="text-sm font-semibold text-gray-400">Pending Orders</p>
@@ -342,7 +422,7 @@ export default function UsedOrders() {
       </div>
 
       {/* Search, Filter, and Sort Controls */}
-      <div className="flex flex-wrap items-center gap-4 w-full">
+      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
         <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -388,7 +468,7 @@ export default function UsedOrders() {
       </div>
 
       {filteredOrders.length === 0 ? (
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {orders.length === 0
               ? 'No orders yet. Start by creating a new order.'
@@ -396,7 +476,7 @@ export default function UsedOrders() {
           </p>
         </div>
       ) : (
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -547,7 +627,15 @@ export default function UsedOrders() {
           setSelectedOrder(null)
         }}
         onConfirm={confirmDelete}
-        orderName={selectedOrder?.customerName || ''}
+        title="Delete Order"
+        itemName={selectedOrder ? `${selectedOrder.itemName} - ${selectedOrder.customerName}` : ''}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExport}
+        title="Export Orders"
       />
     </section>
   )

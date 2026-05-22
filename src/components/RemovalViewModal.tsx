@@ -28,12 +28,12 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto card">
-        <div className="sticky top-0 flex items-center justify-between pb-4 border-b mb-6">
+      <div className="relative w-full max-w-2xl max-h-[73vh] overflow-y-auto backdrop-blur-2xl border border-white/10 rounded-3xl p-8 text-gray-300">
+        <div className="flex items-center justify-between pb-4 mb-6">
           <h2 className="text-2xl font-semibold">Removal Details</h2>
-          <button type="button" onClick={onClose} className="p-2 rounded-md transition-colors">
+          <button type="button" onClick={onClose} className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-300">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -108,8 +108,8 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
             )}
           </div>
 
-          <div className="flex justify-end pt-4 border-t">
-            <button type="button" onClick={onClose} className="btn border px-6">
+          <div className="flex justify-end pt-4">
+            <button type="button" onClick={onClose} className="px-6 py-2 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 hover:bg-white/10 transition-colors">
               Close
             </button>
           </div>

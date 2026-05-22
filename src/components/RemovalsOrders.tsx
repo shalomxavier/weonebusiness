@@ -1,20 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, Search, X } from 'lucide-react'
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-} from 'firebase/firestore'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Eye, Pencil, Trash2, Clock, CheckCircle2, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
+import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import NewRemovalModal from './NewRemovalModal'
 import RemovalViewModal from './RemovalViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
+import ExportModal from './ExportModal'
+import * as XLSX from 'xlsx'
 
 interface RemovalOrder {
   id: string
@@ -33,33 +25,184 @@ interface RemovalOrder {
   status: 'pending' | 'completed'
 }
 
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'completed', label: 'Completed' },
+] as const
+
+function StatusDropdown({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: 'all' | 'pending' | 'completed') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = STATUS_OPTIONS.find((o) => o.value === value)
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[140px]">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span>{selected?.label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+          {STATUS_OPTIONS.map((opt) => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+
+  const select = (day: number) => {
+    const s = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    onChange(s)
+    setOpen(false)
+  }
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
+
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : 'Select date'
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[160px]">
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span className={value ? 'text-gray-300' : 'text-gray-500'}>{display}</span>
+        <div className="flex items-center gap-1">
+          {value && (
+            <span onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-0.5 hover:text-white">
+              <X className="w-3 h-3" />
+            </span>
+          )}
+          <CalendarDays className="w-4 h-4" />
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 left-0 w-full bg-black/80 backdrop-blur-xl rounded-3xl shadow-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-gray-200">{MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-center text-xs text-gray-500 font-medium py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {cells.map((day, i) => {
+              if (!day) return <div key={i} />
+              const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+              const isSelected = dateStr === value
+              const isToday = dateStr === todayStr
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => select(day)}
+                  className={`w-8 h-8 mx-auto rounded-xl text-xs font-medium transition-colors ${
+                    isSelected ? 'bg-purple-600 text-white' :
+                    isToday ? 'ring-1 ring-white/20 text-white' :
+                    'text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex justify-between mt-3 pt-3">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-xs text-gray-400 hover:text-white">Clear</button>
+            <button type="button" onClick={() => { onChange(todayStr); setOpen(false) }} className="text-xs text-purple-400 hover:text-purple-300">Today</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RemovalsOrders() {
   const [orders, setOrders] = useState<RemovalOrder[]>([])
-  const [loading, setLoading] = useState(true)
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<RemovalOrder | null>(null)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
+  // Real-time Firestore listener
   useEffect(() => {
-    const q = query(collection(db, 'removalOrders'), orderBy('createdAt', 'desc'))
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data: RemovalOrder[] = snapshot.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<RemovalOrder, 'id'>),
-        }))
-        setOrders(data)
-        setLoading(false)
-      },
-      (error) => {
-        console.error('Error fetching removal orders:', error)
-        setLoading(false)
-      }
-    )
+    const q = query(collection(db, 'removalOrders'), orderBy('removalDate', 'desc'))
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      })) as RemovalOrder[]
+      setOrders(data)
+    })
     return () => unsubscribe()
   }, [])
 
@@ -92,17 +235,11 @@ export default function RemovalsOrders() {
 
   const handleSaveOrder = async (order: RemovalOrder) => {
     const { id, ...orderData } = order
-    try {
-      if (orders.find((o) => o.id === id)) {
-        await updateDoc(doc(db, 'removalOrders', id), orderData)
-      } else {
-        await addDoc(collection(db, 'removalOrders'), {
-          ...orderData,
-          createdAt: serverTimestamp(),
-        })
-      }
-    } catch (error) {
-      console.error('Error saving removal order:', error)
+    const existingIndex = orders.findIndex((o) => o.id === id)
+    if (existingIndex >= 0) {
+      await updateDoc(doc(db, 'removalOrders', id), orderData)
+    } else {
+      await addDoc(collection(db, 'removalOrders'), orderData)
     }
   }
 
@@ -146,6 +283,71 @@ export default function RemovalsOrders() {
     return result
   }, [orders, searchQuery, statusFilter, dateFilter])
 
+  // Export to Excel
+  const handleExport = (month: number, year: number) => {
+    // Filter orders by selected month and year
+    const monthOrders = orders.filter(order => {
+      const orderDate = new Date(order.removalDate)
+      return orderDate.getMonth() === month && orderDate.getFullYear() === year
+    })
+
+    // Prepare order data for export
+    const orderData = monthOrders.map((order, index) => ({
+      'No.': index + 1,
+      'Customer Name': order.customerName,
+      'Email': order.email,
+      'Phone': order.phone,
+      'Address': order.address,
+      'Postcode': order.postcode,
+      'Removal Date': order.removalDate,
+      'Time': `${order.startTime} - ${order.endTime}`,
+      'Total Price': parseFloat(order.totalPrice),
+      'Advance': parseFloat(order.advance),
+      'Balance': parseFloat(order.totalPrice) - parseFloat(order.advance),
+      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
+      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
+      'Notes': order.notes || '-',
+    }))
+
+    // Calculate totals for the selected month
+    const monthlyTotal = monthOrders.reduce((sum, order) => sum + parseFloat(order.totalPrice), 0)
+    const monthlyAdvance = monthOrders.reduce((sum, order) => sum + parseFloat(order.advance), 0)
+    const monthlyBalance = monthlyTotal - monthlyAdvance
+    const pendingCount = monthOrders.filter(o => o.status === 'pending').length
+    const completedCount = monthOrders.filter(o => o.status === 'completed').length
+
+    // Prepare summary data
+    const summaryData = [
+      ['Removal Order Summary', ''],
+      ['Total Orders', monthOrders.length],
+      ['Pending', pendingCount],
+      ['Completed', completedCount],
+      ['', ''],
+      ['Financial Summary', ''],
+      ['Total Revenue', monthlyTotal],
+      ['Total Advance', monthlyAdvance],
+      ['Total Balance', monthlyBalance],
+    ]
+
+    // Create workbook
+    const wb = XLSX.utils.book_new()
+
+    // Create orders sheet
+    const wsOrders = XLSX.utils.json_to_sheet(orderData)
+    XLSX.utils.book_append_sheet(wb, wsOrders, 'Removal Orders')
+
+    // Create summary sheet
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+
+    // Generate filename with month and year
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const filename = `RemovalOrders_${monthNames[month]}_${year}.xlsx`
+
+    // Download file
+    XLSX.writeFile(wb, filename)
+  }
+
   // Clear all filters
   const clearFilters = () => {
     setSearchQuery('')
@@ -168,54 +370,60 @@ export default function RemovalsOrders() {
   }, [filteredOrders.length])
 
   return (
-    <section className="flex-1 p-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
+      <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-widest">Removals</p>
-          <h1 className="text-3xl font-semibold leading-tight">Orders</h1>
+          <p className="text-sm font-semibold tracking-widest">Removals</p>
+          <h1 className="text-4xl font-semibold leading-tight">Orders</h1>
         </header>
-        <button
-          type="button"
-          className="btn border"
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          New Removal
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+            title="Export to Excel"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
+            New Removal
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="border rounded-lg p-5 flex items-center gap-4">
-          <div className="p-2 rounded-md bg-yellow-100 dark:bg-yellow-900/30">
-            <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-stack-up delay-100">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Pending Removals</p>
+            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'pending').length}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Pending Removals</p>
-            <p className="text-2xl font-semibold">{orders.filter(o => o.status === 'pending').length}</p>
+          <div className="flex items-center justify-center">
+            <Clock className="w-8 h-8 text-orange-400" />
           </div>
         </div>
-        <div className="border rounded-lg p-5 flex items-center gap-4">
-          <div className="p-2 rounded-md bg-green-100 dark:bg-green-900/30">
-            <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Completed Removals</p>
+            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'completed').length}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Completed Removals</p>
-            <p className="text-2xl font-semibold">{orders.filter(o => o.status === 'completed').length}</p>
+          <div className="flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8 text-green-400" />
           </div>
         </div>
       </div>
 
-      {/* Search and Filter Controls */}
-      <div className="flex flex-wrap items-center gap-4">
+      {/* Search, Filter, and Sort Controls */}
+      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-md">
+        <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search by customer, phone, postcode..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
+            className="w-full pl-10 pr-4 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
           />
           {searchQuery && (
             <button
@@ -228,47 +436,21 @@ export default function RemovalsOrders() {
         </div>
 
         {/* Status Filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-        >
-          <option value="all">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="completed">Completed</option>
-        </select>
+        <StatusDropdown value={statusFilter} onChange={setStatusFilter} />
 
         {/* Date Filter */}
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-          />
-          {dateFilter && (
-            <button
-              onClick={() => setDateFilter('')}
-              className="p-1 rounded-full hover:bg-gray-100"
-              title="Clear date"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+        <DatePicker value={dateFilter} onChange={setDateFilter} />
 
         {/* Clear Filters */}
         {(searchQuery || statusFilter !== 'all' || dateFilter) && (
           <button
             onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-sm text-gray-500 hover:text-gray-300 underline"
           >
             Clear filters
           </button>
         )}
       </div>
-
-      {loading && <p className="text-sm text-gray-500">Loading orders...</p>}
 
       {/* Results count */}
       <div className="text-sm text-gray-500">
@@ -278,7 +460,7 @@ export default function RemovalsOrders() {
       </div>
 
       {filteredOrders.length === 0 ? (
-        <div className="border rounded-lg p-6">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {orders.length === 0
               ? 'No orders yet. Start by creating a new removal order.'
@@ -286,60 +468,56 @@ export default function RemovalsOrders() {
           </p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b">
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Customer Name</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Phone Number</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Postcode</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Status</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Date</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Amount</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Customer Name</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Phone Number</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Postcode</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Status</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Date</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Amount</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedOrders.map((order) => (
-                  <tr key={order.id} className="border-b last:border-b-0">
-                    <td className="px-4 py-3 text-sm">{order.customerName}</td>
-                    <td className="px-4 py-3 text-sm">{order.phone}</td>
-                    <td className="px-4 py-3 text-sm">{order.postcode}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        order.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      }`}>
-                        {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                      </span>
+                  <tr key={order.id}>
+                    <td className="px-4 py-3 text-base">{order.customerName}</td>
+                    <td className="px-4 py-3 text-base">{order.phone}</td>
+                    <td className="px-4 py-3 text-base">{order.postcode}</td>
+                    <td className="px-4 py-3 text-base">
+                      {order.status === 'pending'
+                        ? <Clock className="w-5 h-5 text-orange-400" />
+                        : <CheckCircle2 className="w-5 h-5 text-green-400" />}
                     </td>
-                    <td className="px-4 py-3 text-sm">{order.removalDate}</td>
-                    <td className="px-4 py-3 text-sm">£{order.totalPrice}</td>
-                    <td className="px-4 py-3 text-sm">
+                    <td className="px-4 py-3 text-base">{order.removalDate}</td>
+                    <td className="px-4 py-3 text-base">£{order.totalPrice}</td>
+                    <td className="px-4 py-3 text-base">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => handleView(order)}
                           className="p-1.5 rounded transition-colors"
                           title="View"
-                          onClick={() => handleView(order)}
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleEdit(order)}
                           className="p-1.5 rounded transition-colors"
                           title="Edit"
-                          onClick={() => handleEdit(order)}
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleDelete(order)}
                           className="p-1.5 rounded transition-colors"
                           title="Delete"
-                          onClick={() => handleDelete(order)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -361,7 +539,7 @@ export default function RemovalsOrders() {
               setShowAll(true)
               setCurrentPage(1)
             }}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
             Show All ({filteredOrders.length} orders)
           </button>
@@ -375,7 +553,7 @@ export default function RemovalsOrders() {
               setShowAll(false)
               setCurrentPage(1)
             }}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
             Show Less (Last {Math.min(INITIAL_DISPLAY_LIMIT, filteredOrders.length)})
           </button>
@@ -388,7 +566,7 @@ export default function RemovalsOrders() {
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 border rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
@@ -398,21 +576,19 @@ export default function RemovalsOrders() {
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 border rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
         </div>
       )}
 
-      {/* Create Modal */}
       <NewRemovalModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSave={handleSaveOrder}
       />
 
-      {/* View Modal */}
       <RemovalViewModal
         isOpen={isViewModalOpen}
         onClose={() => {
@@ -422,7 +598,6 @@ export default function RemovalsOrders() {
         order={selectedOrder}
       />
 
-      {/* Edit Modal */}
       <NewRemovalModal
         isOpen={isEditModalOpen}
         onClose={() => {
@@ -434,7 +609,6 @@ export default function RemovalsOrders() {
         editId={selectedOrder?.id ?? null}
       />
 
-      {/* Delete Modal */}
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
@@ -443,7 +617,14 @@ export default function RemovalsOrders() {
         }}
         onConfirm={confirmDelete}
         title="Delete Removal Order"
-        itemName={selectedOrder?.customerName}
+        itemName={selectedOrder ? selectedOrder.customerName : ''}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExport}
+        title="Export Removal Orders"
       />
     </section>
   )

@@ -1,4 +1,4 @@
-import { X, Loader2 } from 'lucide-react'
+import { X } from 'lucide-react'
 import { FormEvent, useState } from 'react'
 import { doc, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
@@ -90,15 +90,15 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-md card">
-        <div className="flex items-center justify-between pb-4 border-b mb-6">
+      <div className="relative w-full max-w-md max-h-[73vh] overflow-y-auto backdrop-blur-2xl border border-white/10 rounded-3xl p-8 text-gray-300">
+        <div className="flex items-center justify-between pb-4 mb-6">
           <h2 className="text-2xl font-semibold">New User</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-md transition-colors"
+            className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-300"
           >
             <X className="w-5 h-5" />
           </button>
@@ -114,7 +114,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               disabled={loading}
             />
@@ -129,7 +129,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               disabled={loading}
             />
@@ -144,12 +144,12 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
               minLength={6}
               disabled={loading}
             />
-            <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+            <p className="text-xs text-gray-400 mt-1">Minimum 6 characters</p>
           </div>
 
           <div>
@@ -160,7 +160,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
               id="role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2"
+              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={loading}
             >
               <option value="owner">Owner</option>
@@ -169,26 +169,29 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-400 border border-red-500/30 bg-red-500/10 rounded-2xl px-3 py-2">
               {error}
             </p>
           )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="btn border px-6"
+              className="px-6 py-2 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 hover:bg-white/10 transition-colors"
               disabled={loading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn border px-6 flex items-center gap-2"
+              className="px-6 py-2 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-2"
               disabled={loading}
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {loading && <div className="relative w-4 h-4">
+                <div className="absolute inset-0 border-2 border-white/20 rounded-full"></div>
+                <div className="absolute inset-0 border-2 border-transparent border-t-white rounded-full animate-spin"></div>
+              </div>}
               {loading ? 'Creating...' : 'Create User'}
             </button>
           </div>

@@ -1,14 +1,11 @@
 import { useState, FormEvent } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
   const { login, resetPassword } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
-
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -40,7 +37,7 @@ export default function LoginPage() {
 
     try {
       await login(email.trim(), password)
-      navigate(from, { replace: true })
+      navigate('/', { replace: true })
     } catch (err) {
       setError('Invalid email or password.')
       setLoading(false)
@@ -49,8 +46,8 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4">
-      <h1 className="text-4xl font-bold text-white mb-8">WeOne</h1>
-      <div className="w-full max-w-md bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 p-10 shadow-2xl space-y-6">
+      <h1 className="text-4xl font-bold text-white mb-8 animate-stack-up">WeOne</h1>
+      <div className="w-full max-w-md bg-black/40 backdrop-blur-xl rounded-[2rem] border border-white/10 p-10 shadow-2xl space-y-6 animate-stack-up delay-100">
         <p className="text-base text-gray-400 text-center">Sign in to your account</p>
 
         <form onSubmit={handleSubmit}>
@@ -105,7 +102,7 @@ export default function LoginPage() {
             disabled={loading}
             style={{ outline: 'none', boxShadow: 'none' }}
             onMouseDown={(e) => e.preventDefault()}
-            className="border border-white/20 w-full gap-2 justify-center rounded-xl bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(255,20,147,0.5)] transition-all duration-200 bg-[length:200%_100%] hover:bg-[position:100%_0] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 py-2.5 px-4 font-medium"
+            className="border border-white/20 w-full gap-2 justify-center rounded-xl bg-gradient-to-r from-[#FF1493] via-[#C71585] to-[#FF1493] text-white hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(255,20,147,0.5)] transition-all duration-200 bg-[length:200%_100%] hover:bg-[position:100%_0] focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 py-3 px-6 font-medium text-base"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

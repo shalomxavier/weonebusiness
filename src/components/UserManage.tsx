@@ -1,16 +1,74 @@
-import { useMemo, useState, useEffect } from 'react'
-import { Search, X, Users, Crown, Shield, Trash2, Loader2 } from 'lucide-react'
+import { useMemo, useState, useEffect, useRef } from 'react'
+import { Search, X, Users, Crown, Shield, Trash2, ChevronDown } from 'lucide-react'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
 import NewUserModal, { type User } from './NewUserModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
+
+const ROLE_OPTIONS = [
+  { value: 'all', label: 'All Roles' },
+  { value: 'owner', label: 'Owner' },
+  { value: 'admin', label: 'Admin' },
+] as const
+
+function RoleDropdown({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: 'all' | 'owner' | 'admin') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = ROLE_OPTIONS.find((o) => o.value === value)
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[140px]">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span>{selected?.label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+          {ROLE_OPTIONS.map((opt) => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 export default function UserManage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
   const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -42,7 +100,6 @@ export default function UserManage() {
 
   // Real-time sync with Firestore
   useEffect(() => {
-    setLoading(true)
     const unsubscribe = onSnapshot(
       collection(db, 'users'),
       (snapshot) => {
@@ -51,11 +108,9 @@ export default function UserManage() {
           usersData.push({ id: doc.id, ...doc.data() } as User)
         })
         setUsers(usersData)
-        setLoading(false)
       },
       (error) => {
         console.error('Error fetching users:', error)
-        setLoading(false)
       }
     )
 
@@ -87,56 +142,56 @@ export default function UserManage() {
   }
 
   return (
-    <section className="flex-1 p-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
+      <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-widest">Users</p>
-          <h1 className="text-3xl font-semibold leading-tight">Manage</h1>
+          <p className="text-sm font-semibold tracking-widest">Users</p>
+          <h1 className="text-4xl font-semibold leading-tight">Manage</h1>
         </header>
-        <button type="button" className="btn border" onClick={() => setIsModalOpen(true)}>
+        <button type="button" onClick={() => setIsModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
           New User
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="border rounded-lg p-5 flex items-center gap-4">
-          <div className="p-2 rounded-md bg-gray-100 dark:bg-gray-800">
-            <Users className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Total Users</p>
+            <p className="text-3xl font-bold text-white">{users.length}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Total Users</p>
-            <p className="text-2xl font-semibold">{users.length}</p>
-          </div>
-        </div>
-        <div className="border rounded-lg p-5 flex items-center gap-4">
-          <div className="p-2 rounded-md bg-purple-100 dark:bg-purple-900/30">
-            <Crown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Owners</p>
-            <p className="text-2xl font-semibold">{users.filter(u => u.role === 'owner').length}</p>
+          <div className="flex items-center justify-center">
+            <Users className="w-8 h-8 text-gray-400" />
           </div>
         </div>
-        <div className="border rounded-lg p-5 flex items-center gap-4">
-          <div className="p-2 rounded-md bg-blue-100 dark:bg-blue-900/30">
-            <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Owners</p>
+            <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'owner').length}</p>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest">Admins</p>
-            <p className="text-2xl font-semibold">{users.filter(u => u.role === 'admin').length}</p>
+          <div className="flex items-center justify-center">
+            <Crown className="w-8 h-8 text-purple-400" />
+          </div>
+        </div>
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Admins</p>
+            <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'admin').length}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <Shield className="w-8 h-8 text-blue-400" />
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
+      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
+        <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
+            className="w-full pl-10 pr-4 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
           />
           {searchQuery && (
             <button
@@ -148,20 +203,12 @@ export default function UserManage() {
           )}
         </div>
 
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-          className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-        >
-          <option value="all">All Roles</option>
-          <option value="owner">Owner</option>
-          <option value="admin">Admin</option>
-        </select>
+        <RoleDropdown value={roleFilter} onChange={setRoleFilter} />
 
         {(searchQuery || roleFilter !== 'all') && (
           <button
             onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-sm text-gray-500 hover:text-gray-300 underline"
           >
             Clear filters
           </button>
@@ -172,12 +219,8 @@ export default function UserManage() {
         Showing {filteredUsers.length} of {users.length} users
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-        </div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="border rounded-lg p-6">
+      {filteredUsers.length === 0 ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {users.length === 0
               ? 'No users yet. Start by creating a new user.'
@@ -185,35 +228,31 @@ export default function UserManage() {
           </p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b">
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Name</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Email</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Role</th>
-                  <th className="text-right px-4 py-3 text-sm font-semibold">Actions</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Name</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Role</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Email</th>
+                  <th className="text-right px-4 py-3 text-base font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((user) => (
-                  <tr key={user.id} className="border-b last:border-b-0">
-                    <td className="px-4 py-3 text-sm">{user.name}</td>
-                    <td className="px-4 py-3 text-sm">{user.email}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        user.role === 'owner'
-                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                      }`}>
-                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                      </span>
+                  <tr key={user.id}>
+                    <td className="px-4 py-3 text-base">{user.name}</td>
+                    <td className="px-4 py-3 text-base">
+                      {user.role === 'owner'
+                        ? <Crown className="w-5 h-5 text-purple-400" />
+                        : <Shield className="w-5 h-5 text-blue-400" />}
                     </td>
-                    <td className="px-4 py-3 text-sm text-right">
+                    <td className="px-4 py-3 text-base">{user.email}</td>
+                    <td className="px-4 py-3 text-base text-right">
                       <button
                         onClick={() => handleDeleteClick(user)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-1.5 rounded transition-colors"
                         title="Delete user"
                       >
                         <Trash2 className="w-4 h-4" />

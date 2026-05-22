@@ -25,5 +25,10 @@ service cloud.firestore {
     match /removalOrders/{orderId} {
       allow read, write: if request.auth != null;
     }
+
+    // Removals Expenses collection - any authenticated user can CRUD
+    match /removalsExpenses/{expenseId} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

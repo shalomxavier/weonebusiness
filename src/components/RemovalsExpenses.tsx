@@ -1,43 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
+import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, TrendingUp } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import NewPickupModal from './NewPickupModal'
-import PickupViewModal from './PickupViewModal'
+import * as XLSX from 'xlsx'
+import NewExpenseModal from './NewExpenseModal'
+import ExpenseViewModal from './ExpenseViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import ExportModal from './ExportModal'
-import * as XLSX from 'xlsx'
 
-interface Pickup {
-  id: string
-  pickupNumber: string
-  itemName: string
-  price: string
-  advance: string
-  customerName: string
-  phone: string
-  address: string
-  postcode: string
-  pickupDate: string
-  pickupStartTime: string
-  pickupEndTime: string
-  additionalNotes: string
-  status: 'pending' | 'collected' | 'cancelled'
-}
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Status' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'collected', label: 'Collected' },
-  { value: 'cancelled', label: 'Cancelled' },
+const EXPENSE_TYPES = [
+  { value: 'all', label: 'All Types' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'salary', label: 'Salary' },
+  { value: 'cleaning maintenance', label: 'Cleaning Maintenance' },
+  { value: 'rent', label: 'Rent' },
+  { value: 'food', label: 'Food' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'other', label: 'Other' },
 ] as const
 
-function StatusDropdown({
+interface Expense {
+  id: string
+  type: string
+  amount: string
+  date: string
+  notes: string
+}
+
+function TypeDropdown({
   value,
   onChange,
 }: {
   value: string
-  onChange: (v: 'all' | 'pending' | 'collected' | 'cancelled') => void
+  onChange: (v: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -50,10 +45,10 @@ function StatusDropdown({
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const selected = STATUS_OPTIONS.find((o) => o.value === value)
+  const selected = EXPENSE_TYPES.find((o) => o.value === value)
 
   return (
-    <div ref={ref} className="relative flex-1 min-w-[140px]">
+    <div ref={ref} className="relative flex-1 min-w-[160px]">
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
@@ -64,7 +59,7 @@ function StatusDropdown({
       </button>
       {open && (
         <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
-          {STATUS_OPTIONS.map((opt) => (
+          {EXPENSE_TYPES.map((opt) => (
             <li key={opt.value}>
               <button
                 type="button"
@@ -85,7 +80,7 @@ function StatusDropdown({
   )
 }
 
-function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false)
   const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
@@ -119,10 +114,10 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
 
-  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : 'Select date'
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : placeholder
 
   return (
-    <div ref={ref} className="relative flex-1 min-w-[160px]">
+    <div ref={ref} className="relative flex-1 min-w-[140px]">
       <button
         type="button"
         onClick={() => setOpen(p => !p)}
@@ -184,33 +179,76 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   )
 }
 
-export default function UsedPickups() {
-  const [pickups, setPickups] = useState<Pickup[]>([])
+export default function RemovalsExpenses() {
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
-  // Real-time Firestore listener
+  // Real-time Firestore listener for removals expenses
   useEffect(() => {
-    const q = query(collection(db, 'pickups'), orderBy('pickupDate', 'desc'))
+    const q = query(collection(db, 'removalsExpenses'), orderBy('date', 'desc'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const pickupsData = snapshot.docs.map((doc) => ({
+      const expensesData = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-      })) as Pickup[]
-      setPickups(pickupsData)
+      })) as Expense[]
+      setExpenses(expensesData)
     })
     return () => unsubscribe()
   }, [])
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [selectedPickup, setSelectedPickup] = useState<Pickup | null>(null)
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const handleSaveExpense = async (expense: Omit<Expense, 'id'>) => {
+    await addDoc(collection(db, 'removalsExpenses'), {
+      type: expense.type,
+      amount: expense.amount,
+      date: expense.date,
+      notes: expense.notes,
+    })
+  }
 
-  // Search, filter, and sort states
+  const handleEditSave = async (expense: Omit<Expense, 'id'>) => {
+    if (selectedExpense) {
+      await updateDoc(doc(db, 'removalsExpenses', selectedExpense.id), {
+        type: expense.type,
+        amount: expense.amount,
+        date: expense.date,
+        notes: expense.notes,
+      })
+    }
+  }
+
+  const handleView = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsViewModalOpen(true)
+  }
+
+  const handleEdit = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsEditModalOpen(true)
+  }
+
+  const handleDelete = (expense: Expense) => {
+    setSelectedExpense(expense)
+    setIsDeleteModalOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (selectedExpense) {
+      await deleteDoc(doc(db, 'removalsExpenses', selectedExpense.id))
+    }
+    setIsDeleteModalOpen(false)
+    setSelectedExpense(null)
+  }
+
+  // Search and filter states
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'collected' | 'cancelled'>('all')
-  const [dateFilter, setDateFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -218,90 +256,115 @@ export default function UsedPickups() {
   const ITEMS_PER_PAGE = 20
   const INITIAL_DISPLAY_LIMIT = 5
 
-  // Filtered and sorted pickups
-  const filteredPickups = useMemo(() => {
-    let result = [...pickups]
+  // Filtered expenses
+  const filteredExpenses = useMemo(() => {
+    let result = [...expenses]
 
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       result = result.filter(
-        (pickup) =>
-          pickup.customerName.toLowerCase().includes(query) ||
-          pickup.itemName.toLowerCase().includes(query) ||
-          pickup.pickupNumber.toLowerCase().includes(query) ||
-          pickup.address.toLowerCase().includes(query) ||
-          pickup.phone.toLowerCase().includes(query)
+        (expense) =>
+          expense.type.toLowerCase().includes(query) ||
+          expense.notes.toLowerCase().includes(query)
       )
     }
 
-    // Status filter
-    if (statusFilter !== 'all') {
-      result = result.filter((pickup) => pickup.status === statusFilter)
+    // Type filter
+    if (typeFilter !== 'all') {
+      result = result.filter((expense) => expense.type === typeFilter)
     }
 
-    // Date filter
-    if (dateFilter) {
-      result = result.filter((pickup) => pickup.pickupDate === dateFilter)
+    // Date range filter
+    if (fromDate) {
+      result = result.filter((expense) => expense.date >= fromDate)
+    }
+    if (toDate) {
+      result = result.filter((expense) => expense.date <= toDate)
     }
 
     return result
-  }, [pickups, searchQuery, statusFilter, dateFilter])
+  }, [expenses, searchQuery, typeFilter, fromDate, toDate])
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('')
+    setTypeFilter('all')
+    setFromDate('')
+    setToDate('')
+  }
+
+  // Calculate totals by type
+  const totalsByType = useMemo(() => {
+    const totals: Record<string, number> = {}
+    filteredExpenses.forEach((expense) => {
+      const amount = parseFloat(expense.amount) || 0
+      totals[expense.type] = (totals[expense.type] || 0) + amount
+    })
+    return totals
+  }, [filteredExpenses])
+
+  // Calculate grand total
+  const grandTotal = useMemo(() => {
+    return Object.values(totalsByType).reduce((sum, val) => sum + val, 0)
+  }, [totalsByType])
+
+  // Calculate displayed expenses based on showAll and pagination
+  const displayedExpenses = useMemo(() => {
+    if (!showAll) {
+      return filteredExpenses.slice(0, INITIAL_DISPLAY_LIMIT)
+    }
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredExpenses, showAll, currentPage])
+
+  // Calculate total pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredExpenses.length / ITEMS_PER_PAGE)
+  }, [filteredExpenses.length])
 
   // Export to Excel
   const handleExport = (month: number, year: number) => {
-    // Filter pickups by selected month and year
-    const monthPickups = pickups.filter(pickup => {
-      const pickupDate = new Date(pickup.pickupDate)
-      return pickupDate.getMonth() === month && pickupDate.getFullYear() === year
+    // Filter expenses by selected month and year
+    const monthExpenses = expenses.filter(expense => {
+      const expenseDate = new Date(expense.date)
+      return expenseDate.getMonth() === month && expenseDate.getFullYear() === year
     })
 
-    // Prepare pickup data for export
-    const pickupData = monthPickups.map((pickup, index) => ({
+    // Prepare expense data for export
+    const expenseData = monthExpenses.map((expense, index) => ({
       'No.': index + 1,
-      'Pickup Number': pickup.pickupNumber,
-      'Item Name': pickup.itemName,
-      'Price': parseFloat(pickup.price),
-      'Advance': parseFloat(pickup.advance),
-      'Balance': parseFloat(pickup.price) - parseFloat(pickup.advance),
-      'Customer Name': pickup.customerName,
-      'Phone': pickup.phone,
-      'Address': pickup.address,
-      'Postcode': pickup.postcode,
-      'Pickup Date': pickup.pickupDate,
-      'Pickup Time': `${pickup.pickupStartTime} - ${pickup.pickupEndTime}`,
-      'Status': pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1),
-      'Notes': pickup.additionalNotes || '-',
+      'Type': expense.type.charAt(0).toUpperCase() + expense.type.slice(1),
+      'Amount': parseFloat(expense.amount),
+      'Date': expense.date,
+      'Notes': expense.notes || '-',
     }))
 
     // Calculate totals for the selected month
-    const monthlyTotal = monthPickups.reduce((sum, pickup) => sum + parseFloat(pickup.price), 0)
-    const monthlyAdvance = monthPickups.reduce((sum, pickup) => sum + parseFloat(pickup.advance), 0)
-    const monthlyBalance = monthlyTotal - monthlyAdvance
-    const pendingCount = monthPickups.filter(p => p.status === 'pending').length
-    const collectedCount = monthPickups.filter(p => p.status === 'collected').length
-    const cancelledCount = monthPickups.filter(p => p.status === 'cancelled').length
+    const monthlyTotal = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0)
+    const monthlyTotalsByType: Record<string, number> = {}
+    monthExpenses.forEach(expense => {
+      monthlyTotalsByType[expense.type] = (monthlyTotalsByType[expense.type] || 0) + parseFloat(expense.amount)
+    })
 
     // Prepare summary data
     const summaryData = [
-      ['Pickup Summary', ''],
-      ['Total Pickups', monthPickups.length],
-      ['Pending', pendingCount],
-      ['Collected', collectedCount],
-      ['Cancelled', cancelledCount],
+      ['Summary by Type', ''],
+      ['Type', 'Total'],
+      ...Object.entries(monthlyTotalsByType).map(([type, total]) => [
+        type.charAt(0).toUpperCase() + type.slice(1),
+        total,
+      ]),
       ['', ''],
-      ['Financial Summary', ''],
-      ['Total Revenue', monthlyTotal],
-      ['Total Advance', monthlyAdvance],
-      ['Total Balance', monthlyBalance],
+      ['Grand Total', monthlyTotal],
     ]
 
     // Create workbook
     const wb = XLSX.utils.book_new()
 
-    // Create pickups sheet
-    const wsPickups = XLSX.utils.json_to_sheet(pickupData)
-    XLSX.utils.book_append_sheet(wb, wsPickups, 'Pickups')
+    // Create expenses sheet
+    const wsExpenses = XLSX.utils.json_to_sheet(expenseData)
+    XLSX.utils.book_append_sheet(wb, wsExpenses, 'Expenses')
 
     // Create summary sheet
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
@@ -309,78 +372,21 @@ export default function UsedPickups() {
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const filename = `Pickups_${monthNames[month]}_${year}.xlsx`
+    const filename = `RemovalsExpenses_${monthNames[month]}_${year}.xlsx`
 
     // Download file
     XLSX.writeFile(wb, filename)
-  }
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSearchQuery('')
-    setStatusFilter('all')
-    setDateFilter('')
-  }
-
-  // Calculate displayed pickups based on showAll and pagination
-  const displayedPickups = useMemo(() => {
-    if (!showAll) {
-      return filteredPickups.slice(0, INITIAL_DISPLAY_LIMIT)
-    }
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredPickups.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-  }, [filteredPickups, showAll, currentPage])
-
-  // Calculate total pages
-  const totalPages = useMemo(() => {
-    return Math.ceil(filteredPickups.length / ITEMS_PER_PAGE)
-  }, [filteredPickups.length])
-
-  const handleView = (pickup: Pickup) => {
-    setSelectedPickup(pickup)
-    setIsViewModalOpen(true)
-  }
-
-  const handleEdit = (pickup: Pickup) => {
-    setSelectedPickup(pickup)
-    setIsEditModalOpen(true)
-  }
-
-  const handleDelete = (pickup: Pickup) => {
-    setSelectedPickup(pickup)
-    setIsDeleteModalOpen(true)
-  }
-
-  const confirmDelete = async () => {
-    if (selectedPickup) {
-      try {
-        await deleteDoc(doc(db, 'pickups', selectedPickup.id))
-      } catch (error) {
-        console.error('Error deleting pickup:', error)
-      }
-    }
-    setIsDeleteModalOpen(false)
-    setSelectedPickup(null)
-  }
-
-  const handleSavePickup = async (pickup: Pickup) => {
-    const { id, ...pickupData } = pickup
-    const existingIndex = pickups.findIndex((p) => p.id === id)
-    if (existingIndex >= 0) {
-      await updateDoc(doc(db, 'pickups', id), pickupData)
-    } else {
-      await addDoc(collection(db, 'pickups'), pickupData)
-    }
   }
 
   return (
     <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
       <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
-          <p className="text-sm font-semibold tracking-widest">Used Goods</p>
-          <h1 className="text-4xl font-semibold leading-tight">Pickups</h1>
+          <p className="text-sm font-semibold tracking-widest">Removals</p>
+          <h1 className="text-4xl font-semibold leading-tight">Expenses</h1>
         </header>
         <div className="flex items-center gap-3">
+          {/* Export Button */}
           <button
             onClick={() => setIsExportModalOpen(true)}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
@@ -389,50 +395,55 @@ export default function UsedPickups() {
             <Download className="w-4 h-4" />
             Export
           </button>
-          <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
-            New Pickup
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+          >
+            New Expense
           </button>
         </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
           <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Pending Pickups</p>
-            <p className="text-3xl font-bold text-white">{pickups.filter(o => o.status === 'pending').length}</p>
+            <p className="text-sm font-semibold text-gray-400">Total Expenses</p>
+            <p className="text-3xl font-bold text-white">{filteredExpenses.length}</p>
           </div>
           <div className="flex items-center justify-center">
-            <Clock className="w-8 h-8 text-orange-400" />
+            <span className="text-3xl font-bold text-blue-400">£</span>
           </div>
         </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
           <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Collected Pickups</p>
-            <p className="text-3xl font-bold text-white">{pickups.filter(o => o.status === 'collected').length}</p>
+            <p className="text-sm font-semibold text-gray-400">Grand Total</p>
+            <p className="text-3xl font-bold text-white">£{grandTotal.toFixed(2)}</p>
           </div>
           <div className="flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-green-400" />
+            <span className="text-3xl font-bold text-green-400">£</span>
           </div>
         </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
           <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Cancelled Pickups</p>
-            <p className="text-3xl font-bold text-white">{pickups.filter(o => o.status === 'cancelled').length}</p>
+            <p className="text-sm font-semibold text-gray-400">Avg Per Expense</p>
+            <p className="text-3xl font-bold text-white">£{filteredExpenses.length > 0 ? (grandTotal / filteredExpenses.length).toFixed(2) : '0.00'}</p>
           </div>
           <div className="flex items-center justify-center">
-            <XCircle className="w-8 h-8 text-red-500" />
+            <TrendingUp className="w-8 h-8 text-purple-400" />
           </div>
         </div>
       </div>
 
-      {/* Search, Filter, and Sort Controls */}
+      {/* Search and Filter Controls */}
       <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
         <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by customer, item, address..."
+            placeholder="Search by type or notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
@@ -447,17 +458,18 @@ export default function UsedPickups() {
           )}
         </div>
 
-        {/* Status Filter */}
-        <StatusDropdown value={statusFilter} onChange={setStatusFilter} />
+        {/* Type Filter */}
+        <TypeDropdown value={typeFilter} onChange={setTypeFilter} />
 
-        {/* Date Filter */}
-        <DatePicker value={dateFilter} onChange={setDateFilter} />
+        {/* Date Range Filter */}
+        <DatePicker value={fromDate} onChange={setFromDate} placeholder="From date" />
+        <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
 
         {/* Clear Filters */}
-        {(searchQuery || statusFilter !== 'all' || dateFilter) && (
+        {(searchQuery || typeFilter !== 'all' || fromDate || toDate) && (
           <button
             onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-sm text-gray-500 hover:text-gray-300 underline"
           >
             Clear filters
           </button>
@@ -466,17 +478,17 @@ export default function UsedPickups() {
 
       {/* Results count */}
       <div className="text-sm text-gray-500">
-        {!showAll && filteredPickups.length > INITIAL_DISPLAY_LIMIT
-          ? `Showing ${Math.min(INITIAL_DISPLAY_LIMIT, filteredPickups.length)} of ${filteredPickups.length} pickups`
-          : `Showing ${filteredPickups.length} of ${pickups.length} pickups`}
+        {!showAll && filteredExpenses.length > INITIAL_DISPLAY_LIMIT
+          ? `Showing ${Math.min(INITIAL_DISPLAY_LIMIT, filteredExpenses.length)} of ${filteredExpenses.length} expenses`
+          : `Showing ${filteredExpenses.length} of ${expenses.length} expenses`}
       </div>
 
-      {filteredPickups.length === 0 ? (
+      {filteredExpenses.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
-            {pickups.length === 0
-              ? 'No pickups yet. Start by creating a new pickup.'
-              : 'No pickups match your filters. Try adjusting your search or filters.'}
+            {expenses.length === 0
+              ? 'No expenses yet. Start by creating a new expense.'
+              : 'No expenses match your filters. Try adjusting your search or filters.'}
           </p>
         </div>
       ) : (
@@ -485,37 +497,25 @@ export default function UsedPickups() {
             <table className="w-full">
               <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Customer Name</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Pickup Date</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Pickup Number</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Item Name</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Address</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Postcode</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Status</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Type</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Amount</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Date</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Notes</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {displayedPickups.map((pickup) => (
-                  <tr key={pickup.id}>
-                    <td className="px-4 py-3 text-base">{pickup.customerName}</td>
-                    <td className="px-4 py-3 text-base">{pickup.pickupDate}</td>
-                    <td className="px-4 py-3 text-base">{pickup.pickupNumber}</td>
-                    <td className="px-4 py-3 text-base">{pickup.itemName}</td>
-                    <td className="px-4 py-3 text-base">{pickup.address}</td>
-                    <td className="px-4 py-3 text-base">{pickup.postcode}</td>
-                    <td className="px-4 py-3 text-base">
-                      {pickup.status === 'pending'
-                        ? <Clock className="w-5 h-5 text-orange-400" />
-                        : pickup.status === 'collected'
-                        ? <CheckCircle2 className="w-5 h-5 text-green-400" />
-                        : <XCircle className="w-5 h-5 text-red-500" />}
-                    </td>
+                {displayedExpenses.map((expense) => (
+                  <tr key={expense.id}>
+                    <td className="px-4 py-3 text-base capitalize">{expense.type}</td>
+                    <td className="px-4 py-3 text-base">£{expense.amount}</td>
+                    <td className="px-4 py-3 text-base">{expense.date}</td>
+                    <td className="px-4 py-3 text-base max-w-xs truncate">{expense.notes || '-'}</td>
                     <td className="px-4 py-3 text-base">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleView(pickup)}
+                          onClick={() => handleView(expense)}
                           className="p-1.5 rounded transition-colors"
                           title="View"
                         >
@@ -523,7 +523,7 @@ export default function UsedPickups() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleEdit(pickup)}
+                          onClick={() => handleEdit(expense)}
                           className="p-1.5 rounded transition-colors"
                           title="Edit"
                         >
@@ -531,7 +531,7 @@ export default function UsedPickups() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(pickup)}
+                          onClick={() => handleDelete(expense)}
                           className="p-1.5 rounded transition-colors"
                           title="Delete"
                         >
@@ -548,7 +548,7 @@ export default function UsedPickups() {
       )}
 
       {/* Show All / Show Less Button */}
-      {!showAll && filteredPickups.length > INITIAL_DISPLAY_LIMIT && (
+      {!showAll && filteredExpenses.length > INITIAL_DISPLAY_LIMIT && (
         <div className="flex justify-center">
           <button
             onClick={() => {
@@ -557,7 +557,7 @@ export default function UsedPickups() {
             }}
             className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
-            Show All ({filteredPickups.length} pickups)
+            Show All ({filteredExpenses.length} expenses)
           </button>
         </div>
       )}
@@ -571,7 +571,7 @@ export default function UsedPickups() {
             }}
             className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
-            Show Less (Last {Math.min(INITIAL_DISPLAY_LIMIT, filteredPickups.length)})
+            Show Less (Last {Math.min(INITIAL_DISPLAY_LIMIT, filteredExpenses.length)})
           </button>
         </div>
       )}
@@ -599,48 +599,47 @@ export default function UsedPickups() {
         </div>
       )}
 
-      <NewPickupModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSave={handleSavePickup}
+      <NewExpenseModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveExpense}
       />
 
-      <NewPickupModal
+      <NewExpenseModal
         isOpen={isEditModalOpen}
         onClose={() => {
           setIsEditModalOpen(false)
-          setSelectedPickup(null)
+          setSelectedExpense(null)
         }}
-        editPickup={selectedPickup}
-        editId={selectedPickup?.id}
-        onSave={handleSavePickup}
+        editExpense={selectedExpense}
+        onSave={handleEditSave}
       />
 
-      <PickupViewModal
+      <ExpenseViewModal
         isOpen={isViewModalOpen}
         onClose={() => {
           setIsViewModalOpen(false)
-          setSelectedPickup(null)
+          setSelectedExpense(null)
         }}
-        pickup={selectedPickup}
+        expense={selectedExpense}
       />
 
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
         onClose={() => {
           setIsDeleteModalOpen(false)
-          setSelectedPickup(null)
+          setSelectedExpense(null)
         }}
         onConfirm={confirmDelete}
-        title="Delete Pickup"
-        itemName={selectedPickup ? `${selectedPickup.itemName} - ${selectedPickup.customerName}` : ''}
+        title="Delete Expense"
+        itemName={selectedExpense ? `${selectedExpense.type} - £${selectedExpense.amount}` : ''}
       />
 
       <ExportModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         onExport={handleExport}
-        title="Export Pickups"
+        title="Export Removals Expenses"
       />
     </section>
   )

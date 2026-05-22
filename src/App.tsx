@@ -6,6 +6,7 @@ import UsedOrders from './components/UsedOrders.tsx'
 import UsedPickups from './components/UsedPickups.tsx'
 import UsedExpenses from './components/UsedExpenses.tsx'
 import RemovalsOrders from './components/RemovalsOrders.tsx'
+import RemovalsExpenses from './components/RemovalsExpenses.tsx'
 import UserManage from './components/UserManage.tsx'
 import LoginPage from './components/LoginPage.tsx'
 import ProtectedRoute from './components/ProtectedRoute.tsx'
@@ -18,17 +19,17 @@ function App() {
         <div className="relative min-h-screen bg-black overflow-hidden">
           <div className="fixed inset-0 z-0">
             <LightPillar
-              topColor="#5227FF"
-              bottomColor="#FF9FFC"
-              intensity={1.5}
-              rotationSpeed={0.9}
-              glowAmount={0.001}
-              pillarWidth={2}
+              topColor="#3300ff"
+              bottomColor="#fc00f3"
+              intensity={1.24}
+              rotationSpeed={0.3}
+              glowAmount={0.0018}
+              pillarWidth={6}
               pillarHeight={0.3}
-              noiseIntensity={0.03}
-              pillarRotation={100}
+              noiseIntensity={0.1}
+              pillarRotation={45}
               interactive={true}
-              mixBlendMode="screen"
+              mixBlendMode="normal"
               quality="medium"
             />
           </div>
@@ -42,6 +43,7 @@ function App() {
                   <Route path="used/pickups" element={<UsedPickups />} />
                   <Route path="used/expenses" element={<UsedExpenses />} />
                   <Route path="removals/orders" element={<RemovalsOrders />} />
+                  <Route path="removals/expenses" element={<RemovalsExpenses />} />
                   <Route path="users/manage" element={<UserManage />} />
                 </Route>
               </Route>

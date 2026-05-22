@@ -1,22 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Search, X, Download, Eye, Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, TrendingUp } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import * as XLSX from 'xlsx'
 import NewExpenseModal from './NewExpenseModal'
 import ExpenseViewModal from './ExpenseViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
+import ExportModal from './ExportModal'
 
 const EXPENSE_TYPES = [
-  'all',
-  'diesel',
-  'salary',
-  'cleaning maintenance',
-  'rent',
-  'food',
-  'insurance',
-  'other',
-]
+  { value: 'all', label: 'All Types' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'salary', label: 'Salary' },
+  { value: 'cleaning maintenance', label: 'Cleaning Maintenance' },
+  { value: 'rent', label: 'Rent' },
+  { value: 'food', label: 'Food' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'other', label: 'Other' },
+] as const
 
 interface Expense {
   id: string
@@ -26,6 +27,158 @@ interface Expense {
   notes: string
 }
 
+function TypeDropdown({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = EXPENSE_TYPES.find((o) => o.value === value)
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[160px]">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span>{selected?.label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+          {EXPENSE_TYPES.map((opt) => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+
+  const select = (day: number) => {
+    const s = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    onChange(s)
+    setOpen(false)
+  }
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
+
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : placeholder
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-[140px]">
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span className={value ? 'text-gray-300' : 'text-gray-500'}>{display}</span>
+        <div className="flex items-center gap-1">
+          {value && (
+            <span onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-0.5 hover:text-white">
+              <X className="w-3 h-3" />
+            </span>
+          )}
+          <CalendarDays className="w-4 h-4" />
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 left-0 w-full bg-black/80 backdrop-blur-xl rounded-3xl shadow-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-gray-200">{MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-center text-xs text-gray-500 font-medium py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {cells.map((day, i) => {
+              if (!day) return <div key={i} />
+              const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+              const isSelected = dateStr === value
+              const isToday = dateStr === todayStr
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => select(day)}
+                  className={`w-8 h-8 mx-auto rounded-xl text-xs font-medium transition-colors ${
+                    isSelected ? 'bg-purple-600 text-white' :
+                    isToday ? 'ring-1 ring-white/20 text-white' :
+                    'text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex justify-between mt-3 pt-3">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-xs text-gray-400 hover:text-white">Clear</button>
+            <button type="button" onClick={() => { onChange(todayStr); setOpen(false) }} className="text-xs text-purple-400 hover:text-purple-300">Today</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function UsedExpenses() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -33,7 +186,7 @@ export default function UsedExpenses() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -44,7 +197,6 @@ export default function UsedExpenses() {
         ...doc.data(),
       })) as Expense[]
       setExpenses(expensesData)
-      setLoading(false)
     })
     return () => unsubscribe()
   }, [])
@@ -172,9 +324,15 @@ export default function UsedExpenses() {
   }, [filteredExpenses.length])
 
   // Export to Excel
-  const handleExport = () => {
+  const handleExport = (month: number, year: number) => {
+    // Filter expenses by selected month and year
+    const monthExpenses = expenses.filter(expense => {
+      const expenseDate = new Date(expense.date)
+      return expenseDate.getMonth() === month && expenseDate.getFullYear() === year
+    })
+
     // Prepare expense data for export
-    const expenseData = filteredExpenses.map((expense, index) => ({
+    const expenseData = monthExpenses.map((expense, index) => ({
       'No.': index + 1,
       'Type': expense.type.charAt(0).toUpperCase() + expense.type.slice(1),
       'Amount': parseFloat(expense.amount),
@@ -182,16 +340,23 @@ export default function UsedExpenses() {
       'Notes': expense.notes || '-',
     }))
 
+    // Calculate totals for the selected month
+    const monthlyTotal = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0)
+    const monthlyTotalsByType: Record<string, number> = {}
+    monthExpenses.forEach(expense => {
+      monthlyTotalsByType[expense.type] = (monthlyTotalsByType[expense.type] || 0) + parseFloat(expense.amount)
+    })
+
     // Prepare summary data
     const summaryData = [
       ['Summary by Type', ''],
       ['Type', 'Total'],
-      ...Object.entries(totalsByType).map(([type, total]) => [
+      ...Object.entries(monthlyTotalsByType).map(([type, total]) => [
         type.charAt(0).toUpperCase() + type.slice(1),
         total,
       ]),
       ['', ''],
-      ['Grand Total', grandTotal],
+      ['Grand Total', monthlyTotal],
     ]
 
     // Create workbook
@@ -205,42 +370,83 @@ export default function UsedExpenses() {
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
 
-    // Generate filename with date range
-    const fromStr = fromDate || 'start'
-    const toStr = toDate || 'end'
-    const filename = `Expenses_${fromStr}_to_${toStr}.xlsx`
+    // Generate filename with month and year
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const filename = `Expenses_${monthNames[month]}_${year}.xlsx`
 
     // Download file
     XLSX.writeFile(wb, filename)
   }
 
   return (
-    <section className="flex-1 p-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
+      <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-widest">Used Goods</p>
-          <h1 className="text-3xl font-semibold leading-tight">Expenses</h1>
+          <p className="text-sm font-semibold tracking-widest">Used Goods</p>
+          <h1 className="text-4xl font-semibold leading-tight">Expenses</h1>
         </header>
-        <button
-          type="button"
-          className="btn border"
-          onClick={() => setIsModalOpen(true)}
-        >
-          New Expense
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Export Button */}
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+            title="Export to Excel"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+          >
+            New Expense
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Total Expenses</p>
+            <p className="text-3xl font-bold text-white">{filteredExpenses.length}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <span className="text-3xl font-bold text-blue-400">£</span>
+          </div>
+        </div>
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Grand Total</p>
+            <p className="text-3xl font-bold text-white">£{grandTotal.toFixed(2)}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <span className="text-3xl font-bold text-green-400">£</span>
+          </div>
+        </div>
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">Avg Per Expense</p>
+            <p className="text-3xl font-bold text-white">£{filteredExpenses.length > 0 ? (grandTotal / filteredExpenses.length).toFixed(2) : '0.00'}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <TrendingUp className="w-8 h-8 text-purple-400" />
+          </div>
+        </div>
       </div>
 
       {/* Search and Filter Controls */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-md">
+        <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search by type or notes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
+            className="w-full pl-10 pr-4 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-0"
           />
           {searchQuery && (
             <button
@@ -253,77 +459,32 @@ export default function UsedExpenses() {
         </div>
 
         {/* Type Filter */}
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-        >
-          {EXPENSE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type === 'all' ? 'All Types' : type.charAt(0).toUpperCase() + type.slice(1)}
-            </option>
-          ))}
-        </select>
+        <TypeDropdown value={typeFilter} onChange={setTypeFilter} />
 
         {/* Date Range Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">From:</span>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-          />
-          <span className="text-sm text-gray-500">To:</span>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-          />
-          {(fromDate || toDate) && (
-            <button
-              onClick={() => {
-                setFromDate('')
-                setToDate('')
-              }}
-              className="p-1 rounded-full hover:bg-gray-100"
-              title="Clear dates"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+        <DatePicker value={fromDate} onChange={setFromDate} placeholder="From date" />
+        <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
 
         {/* Clear Filters */}
         {(searchQuery || typeFilter !== 'all' || fromDate || toDate) && (
           <button
             onClick={clearFilters}
-            className="text-sm text-gray-500 hover:text-gray-700 underline"
+            className="text-sm text-gray-500 hover:text-gray-300 underline"
           >
             Clear filters
           </button>
         )}
-
-        {/* Export Button - only shows when date range is selected */}
-        {fromDate && toDate && filteredExpenses.length > 0 && (
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            title="Export to Excel"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-        )}
       </div>
 
-      {loading ? (
-        <div className="border rounded-lg p-6">
-          <p className="text-sm">Loading expenses...</p>
-        </div>
-      ) : filteredExpenses.length === 0 ? (
-        <div className="border rounded-lg p-6">
+      {/* Results count */}
+      <div className="text-sm text-gray-500">
+        {!showAll && filteredExpenses.length > INITIAL_DISPLAY_LIMIT
+          ? `Showing ${Math.min(INITIAL_DISPLAY_LIMIT, filteredExpenses.length)} of ${filteredExpenses.length} expenses`
+          : `Showing ${filteredExpenses.length} of ${expenses.length} expenses`}
+      </div>
+
+      {filteredExpenses.length === 0 ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {expenses.length === 0
               ? 'No expenses yet. Start by creating a new expense.'
@@ -331,31 +492,31 @@ export default function UsedExpenses() {
           </p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b">
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Type</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Amount</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Date</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Notes</th>
-                  <th className="text-left px-4 py-3 text-sm font-semibold">Actions</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Type</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Amount</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Date</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Notes</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedExpenses.map((expense) => (
-                  <tr key={expense.id} className="border-b last:border-b-0">
-                    <td className="px-4 py-3 text-sm capitalize">{expense.type}</td>
-                    <td className="px-4 py-3 text-sm">${expense.amount}</td>
-                    <td className="px-4 py-3 text-sm">{expense.date}</td>
-                    <td className="px-4 py-3 text-sm max-w-xs truncate">{expense.notes || '-'}</td>
-                    <td className="px-4 py-3 text-sm">
+                  <tr key={expense.id}>
+                    <td className="px-4 py-3 text-base capitalize">{expense.type}</td>
+                    <td className="px-4 py-3 text-base">£{expense.amount}</td>
+                    <td className="px-4 py-3 text-base">{expense.date}</td>
+                    <td className="px-4 py-3 text-base max-w-xs truncate">{expense.notes || '-'}</td>
+                    <td className="px-4 py-3 text-base">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleView(expense)}
-                          className="p-1.5 rounded transition-colors"
+                          className="p-1.5 rounded transition-colors hover:text-blue-400"
                           title="View"
                         >
                           <Eye className="w-4 h-4" />
@@ -363,7 +524,7 @@ export default function UsedExpenses() {
                         <button
                           type="button"
                           onClick={() => handleEdit(expense)}
-                          className="p-1.5 rounded transition-colors"
+                          className="p-1.5 rounded transition-colors hover:text-green-400"
                           title="Edit"
                         >
                           <Pencil className="w-4 h-4" />
@@ -371,7 +532,7 @@ export default function UsedExpenses() {
                         <button
                           type="button"
                           onClick={() => handleDelete(expense)}
-                          className="p-1.5 rounded transition-colors"
+                          className="p-1.5 rounded transition-colors hover:text-red-400"
                           title="Delete"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -394,7 +555,7 @@ export default function UsedExpenses() {
               setShowAll(true)
               setCurrentPage(1)
             }}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
             Show All ({filteredExpenses.length} expenses)
           </button>
@@ -408,7 +569,7 @@ export default function UsedExpenses() {
               setShowAll(false)
               setCurrentPage(1)
             }}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-100 transition-colors"
+            className="px-4 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors"
           >
             Show Less (Last {Math.min(INITIAL_DISPLAY_LIMIT, filteredExpenses.length)})
           </button>
@@ -421,7 +582,7 @@ export default function UsedExpenses() {
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 border rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
@@ -431,7 +592,7 @@ export default function UsedExpenses() {
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 border rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl text-gray-300 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
@@ -471,7 +632,14 @@ export default function UsedExpenses() {
         }}
         onConfirm={confirmDelete}
         title="Delete Expense"
-        itemName={selectedExpense ? `${selectedExpense.type} - $${selectedExpense.amount}` : ''}
+        itemName={selectedExpense ? `${selectedExpense.type} - £${selectedExpense.amount}` : ''}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onExport={handleExport}
+        title="Export Expenses"
       />
     </section>
   )

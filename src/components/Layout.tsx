@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User } from 'lucide-react'
+import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
+import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 type NavItem = { id: string; label: string; to: string; icon: React.ElementType }
@@ -74,7 +74,7 @@ function SidebarSection({
         ref={btnRef}
         type="button"
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left rounded-2xl"
-        onClick={() => { lockNav(); applyAnimating(); onToggle() }}
+        onClick={() => { if (!hasActiveItem) { lockNav(); applyAnimating(); onToggle() } }}
         onMouseEnter={applyHover}
         onMouseLeave={applyIdle}
         aria-expanded={isOpen}
@@ -155,7 +155,10 @@ export default function Layout() {
         title: 'Removals',
         icon: TruckIcon,
         defaultOpen: false,
-        items: [{ id: 'removal-orders', label: 'Orders', to: '/removals/orders', icon: FileText }],
+        items: [
+          { id: 'removal-orders', label: 'Orders', to: '/removals/orders', icon: FileText },
+          { id: 'removal-expenses', label: 'Expenses', to: '/removals/expenses', icon: Receipt },
+        ],
       },
       {
         id: 'users',
@@ -206,7 +209,9 @@ export default function Layout() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="relative flex items-center h-16 px-6 mt-8">
-          <h1 className="mx-auto text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF9FFC] bg-clip-text text-transparent">WeOne</h1>
+          <Link to="/" className="mx-auto">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+          </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="absolute right-6 lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
@@ -252,7 +257,23 @@ export default function Layout() {
       </div>
 
       {/* Main content */}
-      <Outlet />
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Mobile top bar */}
+        <div className="lg:hidden flex items-center justify-center px-4 py-4 bg-black/20 backdrop-blur-xl border-b border-white/10 relative">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="absolute left-4 p-2 rounded-xl hover:bg-white/10 transition-colors"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+          <Link to="/">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+          </Link>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <Outlet />
+        </div>
+      </div>
     </div>
   )
 }
