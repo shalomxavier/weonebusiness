@@ -113,13 +113,16 @@ export default function Dashboard() {
 
   const usedGoodsRevenue = filteredOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
   const pickupsExpense = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
+  const pickupsAdvance = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
   const otherExpenses = filteredExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
-  const usedGoodsExpense = pickupsExpense + otherExpenses
+  const usedGoodsExpense = pickupsExpense + otherExpenses + pickupsAdvance
   const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
 
   const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
+  const removalsAdvance = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+  const removalsTotalRevenue = removalsRevenue + removalsAdvance
   const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
-  const removalsProfit = removalsRevenue - removalsExpense
+  const removalsProfit = removalsTotalRevenue - removalsExpense
 
   return (
     <div className="pt-0 px-6 lg:pt-32">
@@ -179,7 +182,7 @@ export default function Dashboard() {
           <MetricCard title="Used Goods Revenue" value={`£${usedGoodsRevenue.toFixed(2)}`} icon={Wallet} iconColor="text-green-400" />
           <MetricCard title="Used Goods Profit" value={`£${usedGoodsProfit.toFixed(2)}`} icon={PoundSterling} iconColor="text-blue-400" />
           <MetricCard title="Removals Expense" value={`£${removalsExpense.toFixed(2)}`} icon={ArrowDownCircle} iconColor="text-red-400" />
-          <MetricCard title="Removals Revenue" value={`£${removalsRevenue.toFixed(2)}`} icon={TrendingUp} iconColor="text-purple-400" />
+          <MetricCard title="Removals Revenue" value={`£${removalsTotalRevenue.toFixed(2)}`} icon={TrendingUp} iconColor="text-purple-400" />
           <MetricCard title="Removals Profit" value={`£${removalsProfit.toFixed(2)}`} icon={Coins} iconColor="text-yellow-400" />
         </div>
       )}

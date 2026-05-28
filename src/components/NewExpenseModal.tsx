@@ -1,4 +1,4 @@
-import { X, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react'
 import { FormEvent, useEffect, useState, useRef } from 'react'
 
 interface Expense {
@@ -23,11 +23,61 @@ const EXPENSE_TYPES = [
   'rent',
   'food',
   'insurance',
+  'refund',
   'other',
 ]
 
 function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
+}
+
+function CustomSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selectedLabel = value ? options.find(opt => opt === value) || '' : ''
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center justify-between"
+      >
+        <span className={!selectedLabel ? 'text-gray-500' : ''}>
+          {selectedLabel ? selectedLabel.charAt(0).toUpperCase() + selectedLabel.slice(1) : 'Select expense type'}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-[60] mt-1 w-full bg-black border border-white/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => { onChange(option); setOpen(false) }}
+              className={`w-full px-3 py-2 text-left transition-colors flex items-center justify-between ${
+                value === option
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span>{option.charAt(0).toUpperCase() + option.slice(1)}</span>
+              {value === option && <Check className="w-4 h-4" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function NewExpenseModal({ isOpen, onClose, onSave, editExpense }: NewExpenseModalProps) {
@@ -212,21 +262,11 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
               <label htmlFor="type" className="block text-sm font-medium mb-1">
                 Expense Type
               </label>
-              <select
-                id="type"
-                name="type"
+              <CustomSelect
                 value={formData.type}
-                onChange={handleChange}
-                className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                required
-              >
-                <option value="" disabled>Select expense type</option>
-                {EXPENSE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setFormData(p => ({ ...p, type: v }))}
+                options={EXPENSE_TYPES}
+              />
             </div>
 
             <div>

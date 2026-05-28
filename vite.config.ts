@@ -8,19 +8,29 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg'],
+      includeAssets: ['logo-180x180.png', 'logo-192x192.png', 'logo-512x512.png'],
       manifest: {
         name: 'Dashboard UI',
         short_name: 'Dashboard',
         description: 'Business Dashboard Application',
-        theme_color: '#0a0a0a',
-        background_color: '#0a0a0a',
+        theme_color: '#1a0a2e',
+        background_color: '#1a0a2e',
         display: 'standalone',
         icons: [
           {
-            src: 'favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml'
+            src: 'logo-180x180.png',
+            sizes: '180x180',
+            type: 'image/png'
+          },
+          {
+            src: 'logo-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'logo-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
           }
         ]
       },
