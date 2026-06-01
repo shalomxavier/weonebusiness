@@ -23,6 +23,7 @@ interface Order {
   deliveryStartTime: string
   deliveryEndTime: string
   additionalNotes: string
+  paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
 }
 
@@ -193,6 +194,7 @@ export default function UsedOrders() {
     const q = query(collection(db, 'orders'), orderBy('deliveryDate', 'desc'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map((doc) => ({
+        paymentMethod: 'card',
         id: doc.id,
         ...doc.data(),
       })) as Order[]
@@ -249,6 +251,22 @@ export default function UsedOrders() {
     if (toDate) {
       result = result.filter((order) => order.deliveryDate <= toDate)
     }
+
+    // Priority sort: pending nearest to today first, then non-pending newest first
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    result.sort((a, b) => {
+      const aPending = a.status === 'pending'
+      const bPending = b.status === 'pending'
+      if (aPending && !bPending) return -1
+      if (!aPending && bPending) return 1
+      const aDate = new Date(a.deliveryDate).getTime()
+      const bDate = new Date(b.deliveryDate).getTime()
+      if (aPending && bPending) {
+        return Math.abs(aDate - today.getTime()) - Math.abs(bDate - today.getTime())
+      }
+      return bDate - aDate
+    })
 
     return result
   }, [orders, searchQuery, statusFilter, fromDate, toDate])

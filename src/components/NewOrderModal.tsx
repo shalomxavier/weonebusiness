@@ -1,5 +1,6 @@
-import { X, CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { FormEvent, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Order {
   id: string
@@ -16,6 +17,7 @@ interface Order {
   deliveryStartTime: string
   deliveryEndTime: string
   additionalNotes: string
+  paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
 }
 
@@ -24,6 +26,73 @@ interface NewOrderModalProps {
   onClose: () => void
   editOrder?: Order | null
   onSave?: (order: Order) => void
+}
+
+function CustomSelect<T extends string>({ value, onChange, options }: {
+  value: T
+  onChange: (v: T) => void
+  options: { value: T; label: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        listRef.current && !listRef.current.contains(e.target as Node)
+      ) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const handleOpen = () => {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect())
+    setOpen((p) => !p)
+  }
+
+  const selected = options.find((o) => o.value === value)
+
+  return (
+    <div className="relative">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleOpen}
+        className="w-full flex items-center justify-between px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span>{selected?.label}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && rect && createPortal(
+        <ul
+          ref={listRef}
+          style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, width: rect.width, zIndex: 9999 }}
+          className="bg-black border border-white/10 rounded-2xl overflow-hidden shadow-xl"
+        >
+          {options.map((opt) => (
+            <li key={opt.value}>
+              <button
+                type="button"
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === opt.value
+                    ? 'bg-white/10 text-white'
+                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            </li>
+          ))}
+        </ul>,
+        document.body
+      )}
+    </div>
+  )
 }
 
 function DatePicker({ value, onChange, required }: { value: string; onChange: (v: string) => void; required?: boolean }) {
@@ -231,6 +300,7 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
     deliveryStartTime: '',
     deliveryEndTime: '',
     additionalNotes: '',
+    paymentMethod: 'card',
     status: 'pending',
   })
 
@@ -252,6 +322,7 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
         deliveryStartTime: '',
         deliveryEndTime: '',
         additionalNotes: '',
+        paymentMethod: 'card',
         status: 'pending',
       })
     }
@@ -470,20 +541,29 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
             </div>
 
             <div>
-              <label htmlFor="status" className="block text-sm font-medium mb-1">
-                Order Status
-              </label>
-              <select
-                id="status"
-                name="status"
+              <label className="block text-sm font-medium mb-1">Order Status</label>
+              <CustomSelect
                 value={formData.status}
-                onChange={handleChange}
-                className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="pending">Pending</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
+                onChange={(v) => setFormData(p => ({ ...p, status: v }))}
+                options={[
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'delivered', label: 'Delivered' },
+                  { value: 'cancelled', label: 'Cancelled' },
+                ]}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Payment Method</label>
+              <CustomSelect
+                value={formData.paymentMethod}
+                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v }))}
+                options={[
+                  { value: 'card', label: 'Card' },
+                  { value: 'cash', label: 'Cash' },
+                  { value: 'both', label: 'Both' },
+                ]}
+              />
             </div>
           </div>
 

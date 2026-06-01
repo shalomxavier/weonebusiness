@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
-import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu } from 'lucide-react'
+import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 type NavItem = { id: string; label: string; to: string; icon: React.ElementType }
@@ -166,6 +166,13 @@ export default function Layout() {
         icon: User,
         defaultOpen: false,
         items: [{ id: 'user-manage', label: 'Manage', to: '/users/manage', icon: Users }],
+      },
+      {
+        id: 'productivity',
+        title: 'Productivity',
+        icon: Target,
+        defaultOpen: false,
+        items: [{ id: 'productivity-leads', label: 'Leads', to: '/productivity/leads', icon: UserPlus }],
       },
     ],
     []

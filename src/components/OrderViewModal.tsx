@@ -15,6 +15,8 @@ interface Order {
   deliveryStartTime: string
   deliveryEndTime: string
   additionalNotes: string
+  paymentMethod?: 'card' | 'cash' | 'both'
+  status?: 'pending' | 'delivered' | 'cancelled'
 }
 
 interface OrderViewModalProps {
@@ -105,6 +107,13 @@ export default function OrderViewModal({ isOpen, onClose, order }: OrderViewModa
               <p className="text-sm font-medium mb-1">Delivery End Time</p>
               <p className="text-base">{order.deliveryEndTime}</p>
             </div>
+
+            {order.paymentMethod && (
+              <div>
+                <p className="text-sm font-medium mb-1">Payment Method</p>
+                <p className="text-base capitalize">{order.paymentMethod}</p>
+              </div>
+            )}
 
             {order.additionalNotes && (
               <div className="md:col-span-2">

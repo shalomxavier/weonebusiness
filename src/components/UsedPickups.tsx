@@ -24,6 +24,7 @@ interface Pickup {
   pickupEndTime: string
   additionalNotes: string
   status: 'pending' | 'collected' | 'cancelled'
+  paymentMethod: 'card' | 'cash' | 'both'
 }
 
 const STATUS_OPTIONS = [
@@ -193,6 +194,7 @@ export default function UsedPickups() {
     const q = query(collection(db, 'pickups'), orderBy('pickupDate', 'desc'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const pickupsData = snapshot.docs.map((doc) => ({
+        paymentMethod: 'card',
         id: doc.id,
         ...doc.data(),
       })) as Pickup[]
@@ -249,6 +251,22 @@ export default function UsedPickups() {
     if (toDate) {
       result = result.filter((pickup) => pickup.pickupDate <= toDate)
     }
+
+    // Priority sort: pending nearest to today first, then non-pending newest first
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    result.sort((a, b) => {
+      const aPending = a.status === 'pending'
+      const bPending = b.status === 'pending'
+      if (aPending && !bPending) return -1
+      if (!aPending && bPending) return 1
+      const aDate = new Date(a.pickupDate).getTime()
+      const bDate = new Date(b.pickupDate).getTime()
+      if (aPending && bPending) {
+        return Math.abs(aDate - today.getTime()) - Math.abs(bDate - today.getTime())
+      }
+      return bDate - aDate
+    })
 
     return result
   }, [pickups, searchQuery, statusFilter, fromDate, toDate])

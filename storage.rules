@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Leads attachments - any authenticated user can read/write
+    match /leads/{enquiryId}/{fileName} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
