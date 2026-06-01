@@ -14,6 +14,7 @@ interface Pickup {
   itemName: string
   price: string
   advance: string
+  advanceDate: string
   customerName: string
   phone: string
   address: string
@@ -63,7 +64,7 @@ function StatusDropdown({
         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+        <ul className="absolute z-[200] mt-1 w-full bg-black rounded-2xl overflow-hidden shadow-xl">
           {STATUS_OPTIONS.map((opt) => (
             <li key={opt.value}>
               <button
@@ -85,7 +86,7 @@ function StatusDropdown({
   )
 }
 
-function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false)
   const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
@@ -119,7 +120,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
 
-  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : 'Select date'
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : placeholder
 
   return (
     <div ref={ref} className="relative flex-1 min-w-[160px]">
@@ -139,7 +140,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
         </div>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 left-0 w-full bg-black/80 backdrop-blur-xl rounded-3xl shadow-xl p-4">
+        <div className="absolute z-[200] mt-1 left-0 w-full bg-black rounded-3xl shadow-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
               <ChevronLeft className="w-4 h-4" />
@@ -210,7 +211,8 @@ export default function UsedPickups() {
   // Search, filter, and sort states
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'collected' | 'cancelled'>('all')
-  const [dateFilter, setDateFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -240,13 +242,16 @@ export default function UsedPickups() {
       result = result.filter((pickup) => pickup.status === statusFilter)
     }
 
-    // Date filter
-    if (dateFilter) {
-      result = result.filter((pickup) => pickup.pickupDate === dateFilter)
+    // Date range filter
+    if (fromDate) {
+      result = result.filter((pickup) => pickup.pickupDate >= fromDate)
+    }
+    if (toDate) {
+      result = result.filter((pickup) => pickup.pickupDate <= toDate)
     }
 
     return result
-  }, [pickups, searchQuery, statusFilter, dateFilter])
+  }, [pickups, searchQuery, statusFilter, fromDate, toDate])
 
   // Export to Excel
   const handleExport = (month: number, year: number) => {
@@ -319,7 +324,8 @@ export default function UsedPickups() {
   const clearFilters = () => {
     setSearchQuery('')
     setStatusFilter('all')
-    setDateFilter('')
+    setFromDate('')
+    setToDate('')
   }
 
   // Calculate displayed pickups based on showAll and pagination
@@ -426,7 +432,7 @@ export default function UsedPickups() {
       </div>
 
       {/* Search, Filter, and Sort Controls */}
-      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
+      <div className="relative z-10 flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
         <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -450,11 +456,12 @@ export default function UsedPickups() {
         {/* Status Filter */}
         <StatusDropdown value={statusFilter} onChange={setStatusFilter} />
 
-        {/* Date Filter */}
-        <DatePicker value={dateFilter} onChange={setDateFilter} />
+        {/* Date Range Filter */}
+        <DatePicker value={fromDate} onChange={setFromDate} placeholder="From date" />
+        <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
 
         {/* Clear Filters */}
-        {(searchQuery || statusFilter !== 'all' || dateFilter) && (
+        {(searchQuery || statusFilter !== 'all' || fromDate || toDate) && (
           <button
             onClick={clearFilters}
             className="text-sm text-gray-500 hover:text-gray-700 underline"
@@ -480,8 +487,8 @@ export default function UsedPickups() {
           </p>
         </div>
       ) : (
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
-          <div className="overflow-x-auto">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl animate-stack-up delay-300">
+          <div className="overflow-x-auto rounded-3xl">
             <table className="w-full">
               <thead>
                 <tr>

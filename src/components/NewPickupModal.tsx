@@ -6,6 +6,7 @@ interface PickupData {
   itemName: string
   price: string
   advance: string
+  advanceDate: string
   customerName: string
   phone: string
   address: string
@@ -31,6 +32,7 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, editId, on
     itemName: '',
     price: '',
     advance: '',
+    advanceDate: '',
     customerName: '',
     phone: '',
     address: '',
@@ -51,6 +53,7 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, editId, on
         itemName: '',
         price: '',
         advance: '',
+        advanceDate: '',
         status: 'pending',
         customerName: '',
         phone: '',
@@ -167,7 +170,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
         </button>
       </div>
       {open && (
-        <div className="absolute z-[60] mt-1 left-0 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl shadow-xl p-4">
+        <div className="absolute z-[60] mt-1 left-0 w-72 bg-black border border-white/10 rounded-3xl shadow-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold text-gray-200">{MONTHS[viewMonth]} {viewYear}</span>
@@ -202,17 +205,16 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
   )
 }
 
-function TimePicker({ value, onChange, required, placeholder = '02:30' }: { value: string; onChange: (v: string) => void; required?: boolean; placeholder?: string }) {
+function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string; onChange: (v: string) => void; required?: boolean; placeholder?: string }) {
   const toDisplay = (iso: string) => {
     if (!iso) return ''
     const [hStr, mStr] = iso.split(':')
-    const h = parseInt(hStr)
-    const h12 = h % 12 === 0 ? 12 : h % 12
-    return `${String(h12).padStart(2, '0')}:${mStr}`
+    return `${hStr.padStart(2, '0')}:${mStr}`
   }
 
   const [typed, setTyped] = useState(() => toDisplay(value))
   const [focused, setFocused] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setTyped(toDisplay(value)) }, [value])
 
@@ -225,7 +227,6 @@ function TimePicker({ value, onChange, required, placeholder = '02:30' }: { valu
       const stripped = cur.replace(/[^0-9]/g, '')
       const next = stripped.slice(0, -1)
       setTyped(next)
-      if (next === '') onChange('')
       return
     }
 
@@ -240,7 +241,7 @@ function TimePicker({ value, onChange, required, placeholder = '02:30' }: { valu
       next = d
     } else if (d.length === 2) {
       const h = parseInt(d)
-      if (h > 12) {
+      if (h > 23) {
         next = `0${d[0]}:${d[1]}`
       } else {
         next = `${d}:`
@@ -248,7 +249,8 @@ function TimePicker({ value, onChange, required, placeholder = '02:30' }: { valu
     } else if (d.length === 3) {
       next = `${d.slice(0,2)}:${d[2]}`
     } else if (d.length === 4) {
-      next = `${d.slice(0,2)}:${d.slice(2,4)}`
+      const m = Math.min(parseInt(d.slice(2,4)), 59)
+      next = `${d.slice(0,2)}:${String(m).padStart(2,'0')}`
     } else {
       return
     }
@@ -261,21 +263,21 @@ function TimePicker({ value, onChange, required, placeholder = '02:30' }: { valu
     const match = display.match(/^(\d{2}):(\d{2})$/)
     if (!match) return
     const h = parseInt(match[1]), m = parseInt(match[2])
-    if (h < 1 || h > 12 || m > 59) return
+    if (h > 23 || m > 59) return
     onChange(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`)
   }
 
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         type="text"
         value={typed}
         onKeyDown={handleKeyDown}
         onChange={() => {}}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => { setFocused(false); if (!typed) onChange('') }}
         placeholder={focused ? '' : placeholder}
-        required={required && !value}
         className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
       />
     </div>
@@ -358,6 +360,16 @@ function TimePicker({ value, onChange, required, placeholder = '02:30' }: { valu
                 className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
+
+            {formData.advance && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Advance Date</label>
+                <DatePicker
+                  value={formData.advanceDate}
+                  onChange={(v) => setFormData(p => ({ ...p, advanceDate: v }))}
+                />
+              </div>
+            )}
 
             <div>
               <label htmlFor="customerName" className="block text-sm font-medium mb-1">

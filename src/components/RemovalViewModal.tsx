@@ -11,6 +11,7 @@ interface RemovalOrder {
   removalDate: string
   totalPrice: string
   advance: string
+  advanceDate: string
   startTime: string
   endTime: string
   paymentMethod: 'card' | 'cash' | 'both'
@@ -94,6 +95,13 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
               <p className="text-sm font-medium mb-1">Advance Amount</p>
               <p className="text-base">£{order.advance || '—'}</p>
             </div>
+
+            {order.advanceDate && (
+              <div>
+                <p className="text-sm font-medium mb-1">Advance Date</p>
+                <p className="text-base">{new Date(order.advanceDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
+            )}
 
             <div>
               <p className="text-sm font-medium mb-1">Payment Method</p>

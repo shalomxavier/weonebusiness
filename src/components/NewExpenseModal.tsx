@@ -203,7 +203,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
         </button>
       </div>
       {open && (
-        <div className="absolute z-[60] mt-1 left-0 w-72 bg-black/80 backdrop-blur-xl border border-white/10 rounded-3xl shadow-xl p-4">
+        <div className="absolute z-[60] mt-1 left-0 w-72 bg-black border border-white/10 rounded-3xl shadow-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-sm font-semibold text-gray-200">{MONTHS[viewMonth]} {viewYear}</span>

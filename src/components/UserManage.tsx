@@ -42,7 +42,7 @@ function RoleDropdown({
         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+        <ul className="absolute z-[200] mt-1 w-full bg-black rounded-2xl overflow-hidden shadow-xl">
           {ROLE_OPTIONS.map((opt) => (
             <li key={opt.value}>
               <button
@@ -183,7 +183,7 @@ export default function UserManage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
+      <div className="relative z-10 flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -228,8 +228,8 @@ export default function UserManage() {
           </p>
         </div>
       ) : (
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
-          <div className="overflow-x-auto">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl animate-stack-up delay-300">
+          <div className="overflow-x-auto rounded-3xl">
             <table className="w-full">
               <thead>
                 <tr>

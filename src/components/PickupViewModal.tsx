@@ -6,6 +6,7 @@ interface Pickup {
   itemName: string
   price: string
   advance: string
+  advanceDate: string
   customerName: string
   phone: string
   address: string
@@ -59,6 +60,13 @@ export default function PickupViewModal({ isOpen, onClose, pickup }: PickupViewM
               <p className="text-sm font-medium mb-1">Advance</p>
               <p className="text-base">${pickup.advance || '—'}</p>
             </div>
+
+            {pickup.advanceDate && (
+              <div>
+                <p className="text-sm font-medium mb-1">Advance Date</p>
+                <p className="text-base">{new Date(pickup.advanceDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+              </div>
+            )}
 
             <div>
               <p className="text-sm font-medium mb-1">Customer Name</p>

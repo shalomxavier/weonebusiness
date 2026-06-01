@@ -58,7 +58,7 @@ function TypeDropdown({
         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <ul className="absolute z-50 mt-1 w-full bg-black/80 backdrop-blur-xl rounded-2xl overflow-hidden shadow-xl">
+        <ul className="absolute z-[200] mt-1 w-full bg-black rounded-2xl overflow-hidden shadow-xl">
           {EXPENSE_TYPES.map((opt) => (
             <li key={opt.value}>
               <button
@@ -134,7 +134,7 @@ function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: s
         </div>
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 left-0 w-full bg-black/80 backdrop-blur-xl rounded-3xl shadow-xl p-4">
+        <div className="absolute z-[200] mt-1 left-0 w-full bg-black rounded-3xl shadow-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
               <ChevronLeft className="w-4 h-4" />
@@ -437,7 +437,7 @@ export default function UsedExpenses() {
       </div>
 
       {/* Search and Filter Controls */}
-      <div className="flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
+      <div className="relative z-10 flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">
         {/* Search */}
         <div className="relative w-1/2 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -492,8 +492,8 @@ export default function UsedExpenses() {
           </p>
         </div>
       ) : (
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl overflow-hidden animate-stack-up delay-300">
-          <div className="overflow-x-auto">
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl animate-stack-up delay-300">
+          <div className="overflow-x-auto rounded-3xl">
             <table className="w-full">
               <thead>
                 <tr>
