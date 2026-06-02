@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react'
-import { X, Paperclip, Trash2, Loader2 } from 'lucide-react'
-import { ref, deleteObject } from 'firebase/storage'
-import { doc, updateDoc } from 'firebase/firestore'
-import { db, storage } from '../lib/firebase'
-import { Enquiry } from './NewEnquiryModal'
+import { X, Paperclip, CalendarDays } from 'lucide-react'
+import { Enquiry, StatusStage } from './NewEnquiryModal'
 
 const STATUS_LABELS: Record<string, string> = {
   'no-answer': 'No Answer',
@@ -29,7 +26,6 @@ interface Props {
 
 export default function EnquiryViewModal({ isOpen, onClose, enquiry }: Props) {
   const [fileUrls, setFileUrls] = useState<string[]>([])
-  const [deletingIndex, setDeletingIndex] = useState<number | null>(null)
 
   useEffect(() => {
     setFileUrls(enquiry?.fileUrls ?? [])
@@ -41,21 +37,6 @@ export default function EnquiryViewModal({ isOpen, onClose, enquiry }: Props) {
     if (!iso) return '—'
     const [y, m, d] = iso.split('-')
     return `${d}/${m}/${y.slice(2)}`
-  }
-
-  const handleDeleteFile = async (url: string, index: number) => {
-    setDeletingIndex(index)
-    try {
-      const storageRef = ref(storage, url)
-      await deleteObject(storageRef)
-      const updated = fileUrls.filter((_, i) => i !== index)
-      await updateDoc(doc(db, 'leads', enquiry.id), { fileUrls: updated })
-      setFileUrls(updated)
-    } catch (err) {
-      console.error('Failed to delete file', err)
-    } finally {
-      setDeletingIndex(null)
-    }
   }
 
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
@@ -80,21 +61,60 @@ export default function EnquiryViewModal({ isOpen, onClose, enquiry }: Props) {
         <div className="space-y-5">
           <Row label="Name" value={enquiry.name} />
           <Row label="Contact Number" value={enquiry.contactNumber} />
-          <Row label="Status" value={
-            <span className={`inline-block px-2.5 py-1 rounded-xl text-xs font-medium ${STATUS_COLORS[enquiry.status]}`}>
-              {STATUS_LABELS[enquiry.status]}
-            </span>
-          } />
+          
+          {/* Status Stages Timeline */}
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-semibold tracking-widest text-gray-500 uppercase">Status Timeline</p>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-3 top-2 bottom-2 w-0.5 bg-gradient-to-b from-purple-500/50 via-purple-500/30 to-transparent" />
+              
+              <div className="space-y-4">
+                {(enquiry.statusStages || [{ status: enquiry.status, notes: enquiry.notes, date: enquiry.callBackDate }]).map((stage: StatusStage, index: number) => (
+                  <div key={index} className="relative flex gap-4">
+                    {/* Timeline dot */}
+                    <div className="relative z-10 flex-shrink-0">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        index === (enquiry.statusStages?.length || 1) - 1 
+                          ? 'bg-purple-500 text-white' 
+                          : 'bg-gray-700 text-gray-400'
+                      }`}>
+                        {index + 1}
+                      </div>
+                    </div>
+                    
+                    {/* Stage card */}
+                    <div className="flex-1 p-3 bg-white/5 border border-white/10 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-medium ${STATUS_COLORS[stage.status]}`}>
+                          {STATUS_LABELS[stage.status]}
+                        </span>
+                        {stage.date && (
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <CalendarDays className="w-3 h-3" />
+                            {fmt(stage.date)}
+                          </span>
+                        )}
+                      </div>
+                      {stage.notes && (
+                        <p className="text-sm text-gray-300 leading-relaxed">{stage.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
           <Row label="Call Back Date" value={fmt(enquiry.callBackDate)} />
-          <Row label="Notes" value={enquiry.notes || '—'} />
+          <Row label="General Notes" value={enquiry.notes || '—'} />
           <Row label="Attachments" value={
             fileUrls.length > 0 ? (
               <div className="flex flex-col gap-2 mt-1">
                 {fileUrls.map((url, i) => {
                   const name = decodeURIComponent(url.split('%2F').pop()?.split('?')[0] ?? `File ${i + 1}`)
-                  const isDeleting = deletingIndex === i
                   return (
-                    <div key={i} className="flex items-center gap-2 group">
+                    <div key={i} className="flex items-center gap-2">
                       <a
                         href={url}
                         target="_blank"
@@ -104,18 +124,6 @@ export default function EnquiryViewModal({ isOpen, onClose, enquiry }: Props) {
                         <Paperclip className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{name}</span>
                       </a>
-                      <button
-                        type="button"
-                        disabled={isDeleting}
-                        onClick={() => handleDeleteFile(url, i)}
-                        className="flex-shrink-0 p-1 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-50"
-                        title="Delete file"
-                      >
-                        {isDeleting
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : <Trash2 className="w-3.5 h-3.5" />
-                        }
-                      </button>
                     </div>
                   )
                 })}

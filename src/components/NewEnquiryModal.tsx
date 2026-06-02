@@ -1,4 +1,4 @@
-import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Upload, Paperclip, Trash2, Loader2 } from 'lucide-react'
+import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Upload, Paperclip, Trash2, Loader2, Plus } from 'lucide-react'
 import { FormEvent, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore'
@@ -7,12 +7,19 @@ import { db, storage } from '../lib/firebase'
 
 type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'completed'
 
+export interface StatusStage {
+  status: EnquiryStatus
+  notes: string
+  date: string
+}
+
 export interface Enquiry {
   id: string
   name: string
   contactNumber: string
   status: EnquiryStatus
   notes: string
+  statusStages: StatusStage[]
   callBackDate: string
   fileUrls: string[]
   createdAt: { toDate: () => Date } | null
@@ -208,13 +215,21 @@ const STATUS_OPTIONS: { value: EnquiryStatus; label: string }[] = [
   { value: 'completed', label: 'Completed' },
 ]
 
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const EMPTY_FORM = {
   name: '',
   contactNumber: '',
   status: 'no-answer' as EnquiryStatus,
   notes: '',
+  enquiryDate: today(),
   followUpDate: '',
+  followUpTime: '00:00',
   files: [] as File[],
+  statusStages: [{ status: 'no-answer' as EnquiryStatus, notes: '', date: today() }] as StatusStage[],
 }
 
 export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnquiryModalProps) {
@@ -232,8 +247,13 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
         contactNumber: editEnquiry.contactNumber,
         status: editEnquiry.status,
         notes: editEnquiry.notes,
+        enquiryDate: editEnquiry.callBackDate || today(),
         followUpDate: editEnquiry.callBackDate,
+        followUpTime: '00:00',
         files: [],
+        statusStages: editEnquiry.statusStages?.length > 0 
+          ? editEnquiry.statusStages 
+          : [{ status: editEnquiry.status, notes: editEnquiry.notes, date: today() }],
       })
     } else {
       setFormData(EMPTY_FORM)
@@ -242,6 +262,14 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    
+    // Validate all stages have dates
+    const missingDates = formData.statusStages.some(stage => !stage.date)
+    if (missingDates) {
+      setError('Please select a date for all status stages')
+      return
+    }
+    
     setSaving(true)
     setError(null)
     try {
@@ -256,18 +284,24 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
         await updateDoc(doc(db, 'leads', editEnquiry.id), {
           name: formData.name,
           contactNumber: formData.contactNumber,
-          status: formData.status,
+          status: formData.statusStages[formData.statusStages.length - 1]?.status || formData.status,
           notes: formData.notes,
+          statusStages: formData.statusStages,
+          enquiryDate: formData.enquiryDate,
           callBackDate: formData.followUpDate,
+          callBackTime: formData.followUpTime,
           fileUrls: [...(editEnquiry.fileUrls ?? []), ...newUrls],
         })
       } else {
         const docRef = await addDoc(collection(db, 'leads'), {
           name: formData.name,
           contactNumber: formData.contactNumber,
-          status: formData.status,
+          status: formData.statusStages[formData.statusStages.length - 1]?.status || formData.status,
           notes: formData.notes,
+          statusStages: formData.statusStages,
+          enquiryDate: formData.enquiryDate,
           callBackDate: formData.followUpDate,
+          callBackTime: formData.followUpTime,
           fileUrls: [],
           createdAt: serverTimestamp(),
         })
@@ -353,26 +387,107 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <CustomSelect
-              value={formData.status}
-              onChange={(v) => setFormData(p => ({ ...p, status: v }))}
-              options={STATUS_OPTIONS}
+            <label className="block text-sm font-medium mb-1">Enquiry Date</label>
+            <DatePicker
+              value={formData.enquiryDate}
+              onChange={(v) => setFormData(p => ({ ...p, enquiryDate: v }))}
             />
           </div>
+
+          {formData.statusStages.map((stage, index) => (
+            <div key={index} className="space-y-3 p-4 bg-white/5 border border-white/10 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-purple-400">Status Stage {index + 1}</label>
+                {formData.statusStages.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ 
+                      ...p, 
+                      statusStages: p.statusStages.filter((_, i) => i !== index) 
+                    }))}
+                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1 text-gray-400">Status</label>
+                <CustomSelect
+                  value={stage.status}
+                  onChange={(v) => setFormData(p => ({ 
+                    ...p, 
+                    statusStages: p.statusStages.map((s, i) => i === index ? { ...s, status: v } : s) 
+                  }))}
+                  options={STATUS_OPTIONS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1 text-gray-400">Notes</label>
+                <textarea
+                  value={stage.notes}
+                  onChange={(e) => setFormData(p => ({ 
+                    ...p, 
+                    statusStages: p.statusStages.map((s, i) => i === index ? { ...s, notes: e.target.value } : s) 
+                  }))}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1 text-gray-400">
+                  Date <span className="text-red-400">*</span>
+                </label>
+                <DatePicker
+                  value={stage.date}
+                  onChange={(v) => setFormData(p => ({ 
+                    ...p, 
+                    statusStages: p.statusStages.map((s, i) => i === index ? { ...s, date: v } : s) 
+                  }))}
+                />
+                {!stage.date && (
+                  <p className="text-xs text-red-400 mt-1">Date is required</p>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setFormData(p => ({ 
+              ...p, 
+              statusStages: [...p.statusStages, { status: 'no-answer', notes: '', date: today() }] 
+            }))}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-purple-500/50 text-purple-400 hover:bg-purple-500/10 hover:border-purple-500 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Add next stage status</span>
+          </button>
 
           {showCalendar && (
             <div>
               <label className="block text-sm font-medium mb-1">Call Back Date</label>
-              <DatePicker
-                value={formData.followUpDate}
-                onChange={(v) => setFormData(p => ({ ...p, followUpDate: v }))}
-              />
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <DatePicker
+                    value={formData.followUpDate}
+                    onChange={(v) => setFormData(p => ({ ...p, followUpDate: v }))}
+                  />
+                </div>
+                <div className="w-32">
+                  <input
+                    type="time"
+                    value={formData.followUpTime}
+                    onChange={(e) => setFormData(p => ({ ...p, followUpTime: e.target.value }))}
+                    className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-1">Notes</label>
+            <label className="block text-sm font-medium mb-1">General notes</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData(p => ({ ...p, notes: e.target.value }))}

@@ -24,6 +24,7 @@ const EXPENSE_TYPES = [
   'food',
   'insurance',
   'refund',
+  'advertisement',
   'other',
 ]
 

@@ -201,7 +201,7 @@ export default function Layout() {
   }, [location.pathname, navSections])
 
   return (
-    <div className="min-h-screen lg:flex text-white">
+    <div className="h-screen lg:flex overflow-hidden text-white">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -264,7 +264,7 @@ export default function Layout() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
         {/* Mobile top bar */}
         <div className="lg:hidden flex items-center justify-center px-4 py-4 bg-black/20 backdrop-blur-xl border-b border-white/10 relative">
           <button
@@ -277,7 +277,7 @@ export default function Layout() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
           </Link>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           <Outlet />
         </div>
       </div>

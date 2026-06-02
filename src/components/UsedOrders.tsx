@@ -510,6 +510,7 @@ export default function UsedOrders() {
                   <th className="text-left px-4 py-3 text-base font-semibold">Delivery Date</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Item Number</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Item Name</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Price</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Address</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Postcode</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Status</th>
@@ -523,6 +524,7 @@ export default function UsedOrders() {
                     <td className="px-4 py-3 text-base">{order.deliveryDate}</td>
                     <td className="px-4 py-3 text-base">{order.itemNumber}</td>
                     <td className="px-4 py-3 text-base">{order.itemName}</td>
+                    <td className="px-4 py-3 text-base">£{order.price}</td>
                     <td className="px-4 py-3 text-base">{order.address}</td>
                     <td className="px-4 py-3 text-base">{order.postcode}</td>
                     <td className="px-4 py-3 text-base">
