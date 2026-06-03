@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext.tsx'
 import SplitText from './SplitText.tsx'
 import MetricCard from './MetricCard.tsx'
 import { Wallet, Coins, CreditCard, PoundSterling, TrendingUp, ArrowDownCircle, Phone, Eye, Pencil } from 'lucide-react'
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import EnquiryViewModal from './EnquiryViewModal'
 import NewEnquiryModal from './NewEnquiryModal'
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [removalOrders, setRemovalOrders] = useState<any[]>([])
   const [removalsExpenses, setRemovalsExpenses] = useState<any[]>([])
   const [leads, setLeads] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [viewLead, setViewLead] = useState<Enquiry | null>(null)
   const [editLead, setEditLead] = useState<Enquiry | null>(null)
 
@@ -40,47 +41,24 @@ export default function Dashboard() {
 
   const timeGreeting = getTimeBasedGreeting()
 
-  // Fetch data from Firestore
+  // Fetch static data once with getDocs; keep onSnapshot only for leads (real-time Today's Tasks)
   useEffect(() => {
-    const pickupsUnsubscribe = onSnapshot(
-      query(collection(db, 'pickups'), orderBy('pickupDate', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        setPickups(data)
-      }
-    )
-
-    const ordersUnsubscribe = onSnapshot(
-      query(collection(db, 'orders'), orderBy('deliveryDate', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        setOrders(data)
-      }
-    )
-
-    const expensesUnsubscribe = onSnapshot(
-      query(collection(db, 'expenses'), orderBy('date', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        setExpenses(data)
-      }
-    )
-
-    const removalsUnsubscribe = onSnapshot(
-      query(collection(db, 'removalOrders'), orderBy('removalDate', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        setRemovalOrders(data)
-      }
-    )
-
-    const removalsExpensesUnsubscribe = onSnapshot(
-      query(collection(db, 'removalsExpenses'), orderBy('date', 'desc')),
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        setRemovalsExpenses(data)
-      }
-    )
+    const fetchStatic = async () => {
+      const [pickupsSnap, ordersSnap, expensesSnap, removalsSnap, removalsExpensesSnap] = await Promise.all([
+        getDocs(query(collection(db, 'pickups'), orderBy('pickupDate', 'desc'))),
+        getDocs(query(collection(db, 'orders'), orderBy('deliveryDate', 'desc'))),
+        getDocs(query(collection(db, 'expenses'), orderBy('date', 'desc'))),
+        getDocs(query(collection(db, 'removalOrders'), orderBy('removalDate', 'desc'))),
+        getDocs(query(collection(db, 'removalsExpenses'), orderBy('date', 'desc'))),
+      ])
+      setPickups(pickupsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+      setOrders(ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+      setExpenses(expensesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+      setRemovalOrders(removalsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+      setRemovalsExpenses(removalsExpensesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+      setLoading(false)
+    }
+    fetchStatic()
 
     const leadsUnsubscribe = onSnapshot(
       query(collection(db, 'leads'), orderBy('createdAt', 'desc')),
@@ -88,53 +66,64 @@ export default function Dashboard() {
     )
 
     return () => {
-      pickupsUnsubscribe()
-      ordersUnsubscribe()
-      expensesUnsubscribe()
-      removalsUnsubscribe()
-      removalsExpensesUnsubscribe()
       leadsUnsubscribe()
     }
   }, [])
 
-  // Filter data by selected month/year and calculate totals
-  const filteredPickups = pickups.filter((pickup) => {
-    const date = new Date(pickup.pickupDate)
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && pickup.status === 'collected'
-  })
+  // Filter and calculate — memoized so they only recompute when deps change
+  const metrics = useMemo(() => {
+    const filteredPickups = pickups.filter((pickup) => {
+      const date = new Date(pickup.pickupDate)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && pickup.status === 'collected'
+    })
+    const filteredOrders = orders.filter((order) => {
+      const date = new Date(order.deliveryDate)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'delivered'
+    })
+    const filteredExpenses = expenses.filter((expense) => {
+      const date = new Date(expense.date)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
+    })
+    const filteredRemovals = removalOrders.filter((order) => {
+      const date = new Date(order.removalDate)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'completed'
+    })
+    const filteredRemovalsExpenses = removalsExpenses.filter((expense) => {
+      const date = new Date(expense.date)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
+    })
 
-  const filteredOrders = orders.filter((order) => {
-    const date = new Date(order.deliveryDate)
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'delivered'
-  })
+    const usedGoodsRevenue = filteredOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
+    const pickupsExpense = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
+    const pickupsAdvance = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
+    const otherExpenses = filteredExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
+    const usedGoodsExpense = pickupsExpense + otherExpenses + pickupsAdvance
+    const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
 
-  const filteredExpenses = expenses.filter((expense) => {
-    const date = new Date(expense.date)
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
-  })
+    const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
+    const removalsAdvance = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+    const removalsTotalRevenue = removalsRevenue + removalsAdvance
+    const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
+    const removalsProfit = removalsTotalRevenue - removalsExpense
 
-  const filteredRemovals = removalOrders.filter((order) => {
-    const date = new Date(order.removalDate)
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'completed'
-  })
+    return { usedGoodsRevenue, usedGoodsExpense, usedGoodsProfit, removalsTotalRevenue, removalsExpense, removalsProfit }
+  }, [pickups, orders, expenses, removalOrders, removalsExpenses, selectedMonth, selectedYear])
 
-  const filteredRemovalsExpenses = removalsExpenses.filter((expense) => {
-    const date = new Date(expense.date)
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
-  })
-
-  const usedGoodsRevenue = filteredOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
-  const pickupsExpense = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
-  const pickupsAdvance = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
-  const otherExpenses = filteredExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
-  const usedGoodsExpense = pickupsExpense + otherExpenses + pickupsAdvance
-  const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
-
-  const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
-  const removalsAdvance = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
-  const removalsTotalRevenue = removalsRevenue + removalsAdvance
-  const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
-  const removalsProfit = removalsTotalRevenue - removalsExpense
+  if (loading) {
+    return (
+      <div className="pt-0 px-6 lg:pt-32 animate-pulse">
+        <div className="px-4 pt-6">
+          <div className="h-12 w-64 bg-white/10 rounded-xl mb-4" />
+          <div className="h-5 w-48 bg-white/5 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 bg-white/5 border border-white/10 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-0 px-6 lg:pt-32">
@@ -256,12 +245,12 @@ export default function Dashboard() {
 
       {isOwner && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4 pb-8 lg:pb-0 animate-stack-up delay-200">
-          <MetricCard title="Used Goods Expense" value={`£${usedGoodsExpense.toFixed(2)}`} icon={CreditCard} iconColor="text-orange-400" />
-          <MetricCard title="Used Goods Revenue" value={`£${usedGoodsRevenue.toFixed(2)}`} icon={Wallet} iconColor="text-green-400" />
-          <MetricCard title="Used Goods Profit" value={`£${usedGoodsProfit.toFixed(2)}`} icon={PoundSterling} iconColor="text-blue-400" />
-          <MetricCard title="Removals Expense" value={`£${removalsExpense.toFixed(2)}`} icon={ArrowDownCircle} iconColor="text-red-400" />
-          <MetricCard title="Removals Revenue" value={`£${removalsTotalRevenue.toFixed(2)}`} icon={TrendingUp} iconColor="text-purple-400" />
-          <MetricCard title="Removals Profit" value={`£${removalsProfit.toFixed(2)}`} icon={Coins} iconColor="text-yellow-400" />
+          <MetricCard title="Used Goods Expense" value={`£${metrics.usedGoodsExpense.toFixed(2)}`} icon={CreditCard} iconColor="text-orange-400" />
+          <MetricCard title="Used Goods Revenue" value={`£${metrics.usedGoodsRevenue.toFixed(2)}`} icon={Wallet} iconColor="text-green-400" />
+          <MetricCard title="Used Goods Profit" value={`£${metrics.usedGoodsProfit.toFixed(2)}`} icon={PoundSterling} iconColor="text-blue-400" />
+          <MetricCard title="Removals Expense" value={`£${metrics.removalsExpense.toFixed(2)}`} icon={ArrowDownCircle} iconColor="text-red-400" />
+          <MetricCard title="Removals Revenue" value={`£${metrics.removalsTotalRevenue.toFixed(2)}`} icon={TrendingUp} iconColor="text-purple-400" />
+          <MetricCard title="Removals Profit" value={`£${metrics.removalsProfit.toFixed(2)}`} icon={Coins} iconColor="text-yellow-400" />
         </div>
       )}
     </div>
