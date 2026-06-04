@@ -10,6 +10,11 @@ const STATUS_LABELS: Record<string, string> = {
   'completed': 'Completed',
 }
 
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  'removal': 'Removal',
+  'clearance': 'Clearance',
+}
+
 const STATUS_COLORS: Record<string, string> = {
   'no-answer': 'text-gray-400 bg-gray-400/10',
   'answered': 'text-blue-400 bg-blue-400/10',
@@ -61,7 +66,8 @@ export default function EnquiryViewModal({ isOpen, onClose, enquiry }: Props) {
         <div className="space-y-5">
           <Row label="Name" value={enquiry.name} />
           <Row label="Contact Number" value={enquiry.contactNumber} />
-          
+          <Row label="Service Type" value={SERVICE_TYPE_LABELS[enquiry.serviceType] || 'Removal'} />
+
           {/* Status Stages Timeline */}
           <div className="flex flex-col gap-3">
             <p className="text-xs font-semibold tracking-widest text-gray-500 uppercase">Status Timeline</p>

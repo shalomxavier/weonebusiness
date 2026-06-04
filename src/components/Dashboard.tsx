@@ -15,10 +15,14 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
   const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
   const ref = useRef<HTMLDivElement>(null)
+  const calendarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        ref.current && !ref.current.contains(e.target as Node) &&
+        calendarRef.current && !calendarRef.current.contains(e.target as Node)
+      ) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -40,7 +44,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   }
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
-  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Select Date'
 
   const btnRef = useRef<HTMLButtonElement>(null)
   const [coords, setCoords] = useState({ top: 0, right: 0 })
@@ -55,6 +59,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 
   const calendar = open ? createPortal(
     <div
+      ref={calendarRef}
       style={{ position: 'fixed', top: coords.top, right: coords.right, zIndex: 9999, backgroundColor: '#1a1a1a', width: '18rem', borderRadius: '1.5rem', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px rgba(0,0,0,0.9)', padding: '1rem' }}
     >
       <div className="flex items-center justify-between mb-3">
@@ -104,16 +109,14 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
         className="flex items-center gap-2 px-3 py-2 bg-white/10 border border-white/20 rounded-xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
       >
         <CalendarDays className="w-4 h-4 text-purple-400 flex-shrink-0" />
-        {display && (
-          <>
-            <span className="text-sm text-gray-300">{display}</span>
-            <span
-              onClick={(e) => { e.stopPropagation(); onChange('') }}
-              className="text-gray-400 hover:text-white"
-            >
-              <X className="w-3 h-3" />
-            </span>
-          </>
+        <span className={`text-sm ${value ? 'text-white font-medium' : 'text-gray-400'}`}>{display}</span>
+        {value && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onChange('') }}
+            className="text-gray-400 hover:text-white ml-1"
+          >
+            <X className="w-3 h-3" />
+          </span>
         )}
       </button>
       {calendar}
@@ -186,52 +189,79 @@ export default function Dashboard() {
 
   // Filter and calculate — memoized so they only recompute when deps change
   const metrics = useMemo(() => {
+    console.log('🔍 Filtering with:', { useSpecificDate, selectedDate, selectedMonth, selectedYear })
+    console.log('📦 Total pickups:', pickups.length)
+    if (pickups.length > 0) {
+      console.log('  Sample pickup:', { date: pickups[0].pickupDate, status: pickups[0].status, number: pickups[0].pickupNumber })
+    }
+    console.log('📦 Total orders:', orders.length)
+    if (orders.length > 0) {
+      console.log('  Sample order:', { date: orders[0].deliveryDate, status: orders[0].status, customer: orders[0].customerName })
+    }
+    
     const filteredPickups = pickups.filter((pickup) => {
+      if (useSpecificDate && selectedDate) {
+        const pickupDateStr = pickup.pickupDate?.split('T')[0] || pickup.pickupDate
+        return pickupDateStr === selectedDate
+      }
       const date = new Date(pickup.pickupDate)
-      if (useSpecificDate && selectedDate) {
-        const pickupDateStr = pickup.pickupDate.split('T')[0]
-        return pickupDateStr === selectedDate && pickup.status === 'collected'
-      }
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && pickup.status === 'collected'
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
+    
+    console.log('📊 Filtered pickups:', filteredPickups.length)
     const filteredOrders = orders.filter((order) => {
-      const date = new Date(order.deliveryDate)
       if (useSpecificDate && selectedDate) {
-        const deliveryDateStr = order.deliveryDate.split('T')[0]
-        return deliveryDateStr === selectedDate && order.status === 'delivered'
+        const deliveryDateStr = order.deliveryDate?.split('T')[0] || order.deliveryDate
+        const matches = deliveryDateStr === selectedDate
+        console.log('  Checking order:', deliveryDateStr, 'vs', selectedDate, '=', matches)
+        return matches
       }
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'delivered'
+      const date = new Date(order.deliveryDate)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
     const filteredExpenses = expenses.filter((expense) => {
-      const date = new Date(expense.date)
       if (useSpecificDate && selectedDate) {
-        const expenseDateStr = expense.date.split('T')[0]
+        const expenseDateStr = expense.date?.split('T')[0] || expense.date
         return expenseDateStr === selectedDate
       }
+      const date = new Date(expense.date)
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
     const filteredRemovals = removalOrders.filter((order) => {
-      const date = new Date(order.removalDate)
       if (useSpecificDate && selectedDate) {
-        const removalDateStr = order.removalDate.split('T')[0]
-        return removalDateStr === selectedDate && order.status === 'completed'
+        const removalDateStr = order.removalDate?.split('T')[0] || order.removalDate
+        return removalDateStr === selectedDate
       }
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear && order.status === 'completed'
+      const date = new Date(order.removalDate)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
     const filteredRemovalsExpenses = removalsExpenses.filter((expense) => {
-      const date = new Date(expense.date)
       if (useSpecificDate && selectedDate) {
-        const expenseDateStr = expense.date.split('T')[0]
+        const expenseDateStr = expense.date?.split('T')[0] || expense.date
         return expenseDateStr === selectedDate
       }
+      const date = new Date(expense.date)
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
 
-    const usedGoodsRevenue = filteredOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
-    const pickupsExpense = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
-    const pickupsAdvance = filteredPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
+    // Used Goods Revenue = price from delivered orders + advance from pending orders
+    const deliveredOrdersPrice = filteredOrders
+      .filter(o => o.status === 'delivered')
+      .reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
+    const pendingOrdersAdvance = filteredOrders
+      .filter(o => o.status === 'pending')
+      .reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+    const usedGoodsRevenue = deliveredOrdersPrice + pendingOrdersAdvance
+    // All item costs = price from collected pickups + advance from pending pickups
+    const collectedPickupsPrice = filteredPickups
+      .filter(p => p.status === 'collected')
+      .reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
+    const pendingPickupsAdvance = filteredPickups
+      .filter(p => p.status === 'pending')
+      .reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
+    const allItemCosts = collectedPickupsPrice + pendingPickupsAdvance
     const otherExpenses = filteredExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
-    const usedGoodsExpense = pickupsExpense + otherExpenses + pickupsAdvance
+    const usedGoodsExpense = allItemCosts + otherExpenses
     const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
 
     const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
@@ -350,39 +380,53 @@ export default function Dashboard() {
           <DatePicker
             value={selectedDate}
             onChange={(v) => {
+              console.log('📅 Date selected:', v)
               setSelectedDate(v)
               setUseSpecificDate(!!v)
+              console.log('📅 useSpecificDate set to:', !!v)
             }}
           />
-          {!useSpecificDate && (
-            <>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                className="w-auto px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                {months.map((month, index) => (
-                  <option key={month} value={index} className="bg-gray-900">
-                    {month}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="w-auto px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                {Array.from({ length: 5 }, (_, i) => {
-                  const year = new Date().getFullYear() - 2 + i
-                  return (
-                    <option key={year} value={year} className="bg-gray-900">
-                      {year}
-                    </option>
-                  )
-                })}
-              </select>
-            </>
-          )}
+          <select
+            value={useSpecificDate ? '' : selectedMonth}
+            onChange={(e) => {
+              if (e.target.value !== '') {
+                setSelectedMonth(parseInt(e.target.value))
+                setUseSpecificDate(false)
+                setSelectedDate('')
+              }
+            }}
+            disabled={useSpecificDate}
+            className="w-auto px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {useSpecificDate && <option value="">Month</option>}
+            {months.map((month, index) => (
+              <option key={month} value={index} className="bg-gray-900">
+                {month}
+              </option>
+            ))}
+          </select>
+          <select
+            value={useSpecificDate ? '' : selectedYear}
+            onChange={(e) => {
+              if (e.target.value !== '') {
+                setSelectedYear(parseInt(e.target.value))
+                setUseSpecificDate(false)
+                setSelectedDate('')
+              }
+            }}
+            disabled={useSpecificDate}
+            className="w-auto px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {useSpecificDate && <option value="">Year</option>}
+            {Array.from({ length: 5 }, (_, i) => {
+              const year = new Date().getFullYear() - 2 + i
+              return (
+                <option key={year} value={year} className="bg-gray-900">
+                  {year}
+                </option>
+              )
+            })}
+          </select>
         </div>
       )}
 

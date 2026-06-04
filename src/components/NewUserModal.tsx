@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
-import { FormEvent, useState } from 'react'
-import { doc, setDoc } from 'firebase/firestore'
+import { FormEvent, useState, useEffect } from 'react'
+import { doc, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
 
 export interface User {
@@ -14,15 +14,17 @@ interface NewUserModalProps {
   isOpen: boolean
   onClose: () => void
   onSave?: (user: User) => void
+  editUser?: User | null
 }
 
-export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalProps) {
+export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewUserModalProps) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('admin')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isEditMode = !!editUser
 
   // Firebase REST API to create user without signing them in
   const createUserViaAPI = async (email: string, password: string) => {
@@ -48,28 +50,59 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
     return response.json()
   }
 
+  // Populate form when editUser changes
+  useEffect(() => {
+    if (editUser) {
+      setName(editUser.name)
+      setEmail(editUser.email)
+      setRole(editUser.role)
+      setPassword('')
+      setError(null)
+    } else {
+      setName('')
+      setEmail('')
+      setRole('admin')
+      setPassword('')
+      setError(null)
+    }
+  }, [editUser, isOpen])
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
     try {
-      // Create Firebase Auth user via REST API (doesn't sign them in)
-      const result = await createUserViaAPI(email, password)
-      const userId = result.localId
+      if (isEditMode && editUser) {
+        // Update existing user - only update Firestore profile
+        const userData: Partial<User> = {
+          name,
+          role: role as 'owner' | 'admin',
+        }
+        await updateDoc(doc(db, 'users', editUser.id), userData)
 
-      // Create user profile in Firestore
-      const userData: User = {
-        id: userId,
-        name,
-        email,
-        role: role as 'owner' | 'admin',
-      }
+        if (onSave) {
+          onSave({ ...editUser, ...userData } as User)
+        }
+      } else {
+        // Create new user
+        // Create Firebase Auth user via REST API (doesn't sign them in)
+        const result = await createUserViaAPI(email, password)
+        const userId = result.localId
 
-      await setDoc(doc(db, 'users', userId), userData)
+        // Create user profile in Firestore
+        const userData: User = {
+          id: userId,
+          name,
+          email,
+          role: role as 'owner' | 'admin',
+        }
 
-      if (onSave) {
-        onSave(userData)
+        await setDoc(doc(db, 'users', userId), userData)
+
+        if (onSave) {
+          onSave(userData)
+        }
       }
 
       // Reset form
@@ -79,7 +112,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
       setRole('admin')
       onClose()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create user'
+      const message = err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} user`
       setError(message)
     } finally {
       setLoading(false)
@@ -94,7 +127,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
 
       <div className="relative w-full max-w-md max-h-[73vh] overflow-y-auto backdrop-blur-2xl border border-white/10 rounded-3xl p-8 text-gray-300">
         <div className="flex items-center justify-between pb-4 mb-6">
-          <h2 className="text-2xl font-semibold">New User</h2>
+          <h2 className="text-2xl font-semibold">{isEditMode ? 'Edit User' : 'New User'}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -131,26 +164,31 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
-              disabled={loading}
+              disabled={loading || isEditMode}
             />
+            {isEditMode && (
+              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+            )}
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              required
-              minLength={6}
-              disabled={loading}
-            />
-            <p className="text-xs text-gray-400 mt-1">Minimum 6 characters</p>
-          </div>
+          {!isEditMode && (
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                required={!isEditMode}
+                minLength={6}
+                disabled={loading}
+              />
+              <p className="text-xs text-gray-400 mt-1">Minimum 6 characters</p>
+            </div>
+          )}
 
           <div>
             <label htmlFor="role" className="block text-sm font-medium mb-1">
@@ -192,7 +230,7 @@ export default function NewUserModal({ isOpen, onClose, onSave }: NewUserModalPr
                 <div className="absolute inset-0 border-2 border-white/20 rounded-full"></div>
                 <div className="absolute inset-0 border-2 border-transparent border-t-white rounded-full animate-spin"></div>
               </div>}
-              {loading ? 'Creating...' : 'Create User'}
+              {loading ? (isEditMode ? 'Saving...' : 'Creating...') : (isEditMode ? 'Save Changes' : 'Create User')}
             </button>
           </div>
         </form>

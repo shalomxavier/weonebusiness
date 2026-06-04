@@ -6,6 +6,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 
 type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'completed'
+type ServiceType = 'removal' | 'clearance'
 
 export interface StatusStage {
   status: EnquiryStatus
@@ -17,6 +18,7 @@ export interface Enquiry {
   id: string
   name: string
   contactNumber: string
+  serviceType: ServiceType
   status: EnquiryStatus
   notes: string
   statusStages: StatusStage[]
@@ -220,9 +222,15 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
+  { value: 'removal', label: 'Removal' },
+  { value: 'clearance', label: 'Clearance' },
+]
+
 const EMPTY_FORM = {
   name: '',
   contactNumber: '',
+  serviceType: 'removal' as ServiceType,
   status: 'no-answer' as EnquiryStatus,
   notes: '',
   enquiryDate: today(),
@@ -245,6 +253,7 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
       setFormData({
         name: editEnquiry.name,
         contactNumber: editEnquiry.contactNumber,
+        serviceType: editEnquiry.serviceType || 'removal',
         status: editEnquiry.status,
         notes: editEnquiry.notes,
         enquiryDate: editEnquiry.callBackDate || today(),
@@ -284,6 +293,7 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
         await updateDoc(doc(db, 'leads', editEnquiry.id), {
           name: formData.name,
           contactNumber: formData.contactNumber,
+          serviceType: formData.serviceType,
           status: formData.statusStages[formData.statusStages.length - 1]?.status || formData.status,
           notes: formData.notes,
           statusStages: formData.statusStages,
@@ -296,6 +306,7 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
         const docRef = await addDoc(collection(db, 'leads'), {
           name: formData.name,
           contactNumber: formData.contactNumber,
+          serviceType: formData.serviceType,
           status: formData.statusStages[formData.statusStages.length - 1]?.status || formData.status,
           notes: formData.notes,
           statusStages: formData.statusStages,
@@ -383,6 +394,15 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
               onChange={(e) => setFormData(p => ({ ...p, contactNumber: e.target.value }))}
               required
               className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Service Type</label>
+            <CustomSelect
+              value={formData.serviceType}
+              onChange={(v) => setFormData(p => ({ ...p, serviceType: v }))}
+              options={SERVICE_TYPE_OPTIONS}
             />
           </div>
 

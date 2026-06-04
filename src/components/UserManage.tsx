@@ -1,8 +1,10 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Search, X, Users, Crown, Shield, Trash2, ChevronDown } from 'lucide-react'
+import { Search, X, Users, Crown, Shield, Trash2, ChevronDown, Eye, Pencil } from 'lucide-react'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
+import { useAuth } from '../context/AuthContext.tsx'
 import NewUserModal, { type User } from './NewUserModal'
+import UserViewModal from './UserViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 
 const ROLE_OPTIONS = [
@@ -65,9 +67,15 @@ function RoleDropdown({
 }
 
 export default function UserManage() {
+  const { user: currentUser } = useAuth()
+  const isOwner = currentUser?.role === 'owner'
+
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [userToEdit, setUserToEdit] = useState<User | null>(null)
+  const [userToView, setUserToView] = useState<User | null>(null)
   const [users, setUsers] = useState<User[]>([])
   const [deleteLoading, setDeleteLoading] = useState(false)
 
@@ -126,6 +134,22 @@ export default function UserManage() {
     setIsDeleteModalOpen(true)
   }
 
+  const handleEditClick = (user: User) => {
+    if (!isOwner) return
+    setUserToEdit(user)
+    setIsModalOpen(true)
+  }
+
+  const handleViewClick = (user: User) => {
+    setUserToView(user)
+    setIsViewModalOpen(true)
+  }
+
+  const handleModalClose = () => {
+    setIsModalOpen(false)
+    setUserToEdit(null)
+  }
+
   const handleConfirmDelete = async () => {
     if (!userToDelete) return
 
@@ -148,9 +172,11 @@ export default function UserManage() {
           <p className="text-sm font-semibold tracking-widest">Users</p>
           <h1 className="text-4xl font-semibold leading-tight">Manage</h1>
         </header>
-        <button type="button" onClick={() => setIsModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
-          New User
-        </button>
+        {isOwner && (
+          <button type="button" onClick={() => setIsModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
+            New User
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
@@ -250,13 +276,33 @@ export default function UserManage() {
                     </td>
                     <td className="px-4 py-3 text-base">{user.email}</td>
                     <td className="px-4 py-3 text-base text-right">
-                      <button
-                        onClick={() => handleDeleteClick(user)}
-                        className="p-1.5 rounded transition-colors"
-                        title="Delete user"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleViewClick(user)}
+                          className="p-1.5 rounded transition-colors hover:bg-white/10 text-gray-400 hover:text-gray-200"
+                          title="View user"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {isOwner && (
+                          <>
+                            <button
+                              onClick={() => handleEditClick(user)}
+                              className="p-1.5 rounded transition-colors hover:bg-white/10 text-gray-400 hover:text-blue-400"
+                              title="Edit user"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(user)}
+                              className="p-1.5 rounded transition-colors hover:bg-white/10 text-gray-400 hover:text-red-400"
+                              title="Delete user"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -266,7 +312,18 @@ export default function UserManage() {
         </div>
       )}
 
-      <NewUserModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveUser} />
+      <NewUserModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        onSave={handleSaveUser}
+        editUser={userToEdit}
+      />
+
+      <UserViewModal
+        isOpen={isViewModalOpen}
+        onClose={() => { setIsViewModalOpen(false); setUserToView(null) }}
+        user={userToView}
+      />
 
       <DeleteConfirmModal
         isOpen={isDeleteModalOpen}
