@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile scrolling fixes */
+html, body {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+  overflow-y: auto;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.08) transparent;

@@ -17,8 +17,8 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <div className="relative min-h-screen bg-black overflow-hidden">
-          <div className="fixed inset-0 z-0">
+        <div className="relative min-h-screen bg-black">
+          <div className="fixed inset-0 z-0 pointer-events-none">
             <LightPillar
               topColor="#3300ff"
               bottomColor="#fc00f3"
