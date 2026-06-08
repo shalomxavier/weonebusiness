@@ -202,6 +202,16 @@ export default function Dashboard() {
 
   // Filter and calculate — memoized so they only recompute when deps change
   const metrics = useMemo(() => {
+    console.log('🔍 Filtering with:', { useSpecificDate, selectedDate, selectedMonth, selectedYear })
+    console.log('📦 Total pickups:', pickups.length)
+    if (pickups.length > 0) {
+      console.log('  Sample pickup:', { date: pickups[0].pickupDate, status: pickups[0].status, number: pickups[0].pickupNumber })
+    }
+    console.log('📦 Total orders:', orders.length)
+    if (orders.length > 0) {
+      console.log('  Sample order:', { date: orders[0].deliveryDate, status: orders[0].status, customer: orders[0].customerName })
+    }
+    
     const filteredPickups = pickups.filter((pickup) => {
       if (useSpecificDate && selectedDate) {
         const pickupDateStr = pickup.pickupDate?.split('T')[0] || pickup.pickupDate
@@ -211,10 +221,13 @@ export default function Dashboard() {
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
     
+    console.log('📊 Filtered pickups:', filteredPickups.length)
     const filteredOrders = orders.filter((order) => {
       if (useSpecificDate && selectedDate) {
         const deliveryDateStr = order.deliveryDate?.split('T')[0] || order.deliveryDate
-        return deliveryDateStr === selectedDate
+        const matches = deliveryDateStr === selectedDate
+        console.log('  Checking order:', deliveryDateStr, 'vs', selectedDate, '=', matches)
+        return matches
       }
       const date = new Date(order.deliveryDate)
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
@@ -506,8 +519,10 @@ export default function Dashboard() {
           <DatePicker
             value={selectedDate}
             onChange={(v) => {
+              console.log('📅 Date selected:', v)
               setSelectedDate(v)
               setUseSpecificDate(!!v)
+              console.log('📅 useSpecificDate set to:', !!v)
             }}
           />
           <select
