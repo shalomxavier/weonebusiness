@@ -6,7 +6,7 @@ import NewEnquiryModal, { Enquiry } from './NewEnquiryModal'
 import EnquiryViewModal from './EnquiryViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 
-type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'completed'
+type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'got-booked' | 'completed-without-booking'
 type FilterStatus = 'all' | EnquiryStatus
 
 const FILTER_OPTIONS: { value: FilterStatus; label: string }[] = [
@@ -15,7 +15,8 @@ const FILTER_OPTIONS: { value: FilterStatus; label: string }[] = [
   { value: 'answered', label: 'Answered' },
   { value: 'very-interested', label: 'Very Interested' },
   { value: 'looking-for-quotes', label: 'Looking for Quotes' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'got-booked', label: 'Got Booked' },
+  { value: 'completed-without-booking', label: 'Completed Without Booking' },
 ]
 
 function OverdueModal({ isOpen, onClose, entries, onView, onEdit }: {
@@ -111,12 +112,13 @@ function StatusDropdown({ value, onChange }: { value: FilterStatus; onChange: (v
 }
 
 const STATUS_CARD_CONFIGS: { status: FilterStatus; label: string; color: string; icon: React.ElementType }[] = [
-  { status: 'all',                 label: 'Total',              color: 'text-white',        icon: LayoutList    },
-  { status: 'no-answer',          label: 'No Answer',          color: 'text-gray-400',     icon: PhoneMissed   },
-  { status: 'answered',           label: 'Answered',           color: 'text-blue-400',     icon: PhoneCall     },
-  { status: 'very-interested',    label: 'Very Interested',    color: 'text-green-400',    icon: Flame         },
-  { status: 'looking-for-quotes', label: 'Looking for Quotes', color: 'text-yellow-400',   icon: FileSearch    },
-  { status: 'completed',          label: 'Completed',          color: 'text-purple-400',   icon: CheckCircle2  },
+  { status: 'all',                       label: 'Total',                     color: 'text-white',        icon: LayoutList    },
+  { status: 'no-answer',                label: 'No Answer',                color: 'text-gray-400',     icon: PhoneMissed   },
+  { status: 'answered',                 label: 'Answered',                 color: 'text-blue-400',     icon: PhoneCall     },
+  { status: 'very-interested',         label: 'Very Interested',          color: 'text-green-400',    icon: Flame         },
+  { status: 'looking-for-quotes',       label: 'Looking for Quotes',       color: 'text-yellow-400',   icon: FileSearch    },
+  { status: 'got-booked',               label: 'Got Booked',               color: 'text-purple-400',   icon: CheckCircle2  },
+  { status: 'completed-without-booking', label: 'Completed Without Booking', color: 'text-orange-400',   icon: CheckCircle2  },
 ]
 
 const STATUS_LABELS: Record<EnquiryStatus, string> = {
@@ -124,7 +126,8 @@ const STATUS_LABELS: Record<EnquiryStatus, string> = {
   'answered': 'Answered',
   'very-interested': 'Very Interested',
   'looking-for-quotes': 'Looking for Quotes',
-  'completed': 'Completed',
+  'got-booked': 'Got Booked',
+  'completed-without-booking': 'Completed Without Booking',
 }
 
 const STATUS_COLORS: Record<EnquiryStatus, string> = {
@@ -132,7 +135,8 @@ const STATUS_COLORS: Record<EnquiryStatus, string> = {
   'answered': 'text-blue-400 bg-blue-400/10',
   'very-interested': 'text-green-400 bg-green-400/10',
   'looking-for-quotes': 'text-yellow-400 bg-yellow-400/10',
-  'completed': 'text-purple-400 bg-purple-400/10',
+  'got-booked': 'text-purple-400 bg-purple-400/10',
+  'completed-without-booking': 'text-orange-400 bg-orange-400/10',
 }
 
 export default function Leads() {
@@ -167,7 +171,7 @@ export default function Leads() {
   }, [])
 
   const overdueEntries = useMemo(() =>
-    enquiries.filter(e => e.callBackDate && e.callBackDate < todayIso && e.status !== 'completed')
+    enquiries.filter(e => e.callBackDate && e.callBackDate < todayIso && e.status !== 'got-booked' && e.status !== 'completed-without-booking')
   , [enquiries, todayIso])
 
   const next7Days = useMemo(() => {
@@ -178,7 +182,7 @@ export default function Leads() {
       const d = new Date(today)
       d.setDate(today.getDate() + i)
       const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-      const count = enquiries.filter(e => e.callBackDate === iso).length
+      const count = enquiries.filter(e => e.callBackDate === iso && e.status !== 'got-booked' && e.status !== 'completed-without-booking').length
       const label = i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })
       const dateLabel = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
       days.push({ iso, label, dateLabel, count, isToday: i === 0 })
@@ -267,7 +271,7 @@ export default function Leads() {
           const t = new Date()
           return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
         })()
-        const callToday = enquiries.filter(e => e.callBackDate === todayIso)
+        const callToday = enquiries.filter(e => e.callBackDate === todayIso && e.status !== 'got-booked' && e.status !== 'completed-without-booking')
         if (callToday.length === 0) return null
         return (
           <div className="space-y-3 animate-stack-up delay-125">

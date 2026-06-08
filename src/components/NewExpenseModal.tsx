@@ -17,15 +17,16 @@ interface NewExpenseModalProps {
 }
 
 const EXPENSE_TYPES = [
-  'diesel',
-  'salary',
-  'cleaning maintenance',
-  'rent',
-  'food',
-  'insurance',
-  'refund',
-  'advertisement',
-  'other',
+  'Diesel',
+  'Salary',
+  'Cleaning Maintenance',
+  'Rent',
+  'Food',
+  'Insurance',
+  'Vehicle Maintenance',
+  'Refund',
+  'Advertisement',
+  'Other',
 ]
 
 function getTodayDate(): string {

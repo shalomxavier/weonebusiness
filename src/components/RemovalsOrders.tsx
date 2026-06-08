@@ -413,27 +413,42 @@ export default function RemovalsOrders() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-stack-up delay-100">
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Pending Removals</p>
-            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'pending').length}</p>
+      {/* Stats Cards - filtered by date range only (not search query) */}
+      {(() => {
+        // Apply only date filters for stats (not search query)
+        let dateFilteredOrders = [...orders]
+        if (fromDate) {
+          dateFilteredOrders = dateFilteredOrders.filter((order) => order.removalDate >= fromDate)
+        }
+        if (toDate) {
+          dateFilteredOrders = dateFilteredOrders.filter((order) => order.removalDate <= toDate)
+        }
+        const pendingCount = dateFilteredOrders.filter(o => o.status === 'pending').length
+        const completedCount = dateFilteredOrders.filter(o => o.status === 'completed').length
+        
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-stack-up delay-100">
+            <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+              <div className="flex flex-col gap-2 justify-center">
+                <p className="text-sm font-semibold text-gray-400">Pending Removals</p>
+                <p className="text-3xl font-bold text-white">{pendingCount}</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <Clock className="w-8 h-8 text-orange-400" />
+              </div>
+            </div>
+            <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
+              <div className="flex flex-col gap-2 justify-center">
+                <p className="text-sm font-semibold text-gray-400">Completed Removals</p>
+                <p className="text-3xl font-bold text-white">{completedCount}</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center justify-center">
-            <Clock className="w-8 h-8 text-orange-400" />
-          </div>
-        </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Completed Removals</p>
-            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'completed').length}</p>
-          </div>
-          <div className="flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-green-400" />
-          </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Search, Filter, and Sort Controls */}
       <div className="relative z-10 flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">

@@ -8,6 +8,7 @@ import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firest
 import { db } from '../lib/firebase'
 import EnquiryViewModal from './EnquiryViewModal'
 import NewEnquiryModal from './NewEnquiryModal'
+import BreakdownModal from './BreakdownModal'
 import type { Enquiry } from './NewEnquiryModal'
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -143,6 +144,18 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [viewLead, setViewLead] = useState<Enquiry | null>(null)
   const [editLead, setEditLead] = useState<Enquiry | null>(null)
+  const [breakdownModal, setBreakdownModal] = useState<{
+    isOpen: boolean
+    title: string
+    total: string
+    categories: {
+      label: string
+      value: number
+      count: number
+      transactions: { id: string; title: string; subtitle?: string; amount: number; date?: string; status?: string }[]
+    }[]
+  }>({ isOpen: false, title: '', total: '', categories: [] })
+
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -189,16 +202,6 @@ export default function Dashboard() {
 
   // Filter and calculate — memoized so they only recompute when deps change
   const metrics = useMemo(() => {
-    console.log('🔍 Filtering with:', { useSpecificDate, selectedDate, selectedMonth, selectedYear })
-    console.log('📦 Total pickups:', pickups.length)
-    if (pickups.length > 0) {
-      console.log('  Sample pickup:', { date: pickups[0].pickupDate, status: pickups[0].status, number: pickups[0].pickupNumber })
-    }
-    console.log('📦 Total orders:', orders.length)
-    if (orders.length > 0) {
-      console.log('  Sample order:', { date: orders[0].deliveryDate, status: orders[0].status, customer: orders[0].customerName })
-    }
-    
     const filteredPickups = pickups.filter((pickup) => {
       if (useSpecificDate && selectedDate) {
         const pickupDateStr = pickup.pickupDate?.split('T')[0] || pickup.pickupDate
@@ -208,13 +211,10 @@ export default function Dashboard() {
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
     
-    console.log('📊 Filtered pickups:', filteredPickups.length)
     const filteredOrders = orders.filter((order) => {
       if (useSpecificDate && selectedDate) {
         const deliveryDateStr = order.deliveryDate?.split('T')[0] || order.deliveryDate
-        const matches = deliveryDateStr === selectedDate
-        console.log('  Checking order:', deliveryDateStr, 'vs', selectedDate, '=', matches)
-        return matches
+        return deliveryDateStr === selectedDate
       }
       const date = new Date(order.deliveryDate)
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
@@ -265,12 +265,129 @@ export default function Dashboard() {
     const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
 
     const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
-    const removalsAdvance = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
-    const removalsTotalRevenue = removalsRevenue + removalsAdvance
+    // Note: advance is already included in totalPrice, so we don't add it separately
+    const removalsTotalRevenue = removalsRevenue
     const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
     const removalsProfit = removalsTotalRevenue - removalsExpense
 
-    return { usedGoodsRevenue, usedGoodsExpense, usedGoodsProfit, removalsTotalRevenue, removalsExpense, removalsProfit }
+    // Build detailed breakdown data with transactions
+    const collectedPickupsTx = filteredPickups
+      .filter(p => p.status === 'collected' && parseFloat(p.price) > 0)
+      .map(p => ({
+        id: p.id,
+        title: p.pickupNumber || p.id.slice(-6),
+        subtitle: p.customerName || p.customerPhone || 'Unknown',
+        amount: parseFloat(p.price) || 0,
+        date: p.pickupDate,
+        status: p.status
+      }))
+
+    const pendingPickupsTx = filteredPickups
+      .filter(p => p.status === 'pending' && parseFloat(p.advance) > 0)
+      .map(p => ({
+        id: p.id,
+        title: p.pickupNumber || p.id.slice(-6),
+        subtitle: p.customerName || p.customerPhone || 'Unknown',
+        amount: parseFloat(p.advance) || 0,
+        date: p.pickupDate,
+        status: p.status
+      }))
+
+    const otherExpensesTx = filteredExpenses
+      .filter(e => parseFloat(e.amount) > 0)
+      .map(e => ({
+        id: e.id,
+        title: e.description || e.type || 'Expense',
+        subtitle: e.type || 'Uncategorized',
+        amount: parseFloat(e.amount) || 0,
+        date: e.date
+      }))
+
+    const deliveredOrdersTx = filteredOrders
+      .filter(o => o.status === 'delivered' && parseFloat(o.price) > 0)
+      .map(o => ({
+        id: o.id,
+        title: o.orderNumber || o.id.slice(-6),
+        subtitle: o.customerName || o.customerPhone || 'Unknown',
+        amount: parseFloat(o.price) || 0,
+        date: o.deliveryDate,
+        status: o.status
+      }))
+
+    const pendingOrdersTx = filteredOrders
+      .filter(o => o.status === 'pending' && parseFloat(o.advance) > 0)
+      .map(o => ({
+        id: o.id,
+        title: o.orderNumber || o.id.slice(-6),
+        subtitle: o.customerName || o.customerPhone || 'Unknown',
+        amount: parseFloat(o.advance) || 0,
+        date: o.deliveryDate,
+        status: o.status
+      }))
+
+    const removalOrdersTx = filteredRemovals
+      .filter(r => parseFloat(r.totalPrice) > 0)
+      .map(r => ({
+        id: r.id,
+        title: r.removalNumber || r.id.slice(-6),
+        subtitle: r.customerName || r.customerPhone || 'Unknown',
+        amount: parseFloat(r.totalPrice) || 0,
+        date: r.removalDate
+      }))
+
+    // Note: advance is part of totalPrice, so we don't show it separately in revenue breakdown
+
+    const removalExpensesTx = filteredRemovalsExpenses
+      .filter(e => parseFloat(e.amount) > 0)
+      .map(e => ({
+        id: e.id,
+        title: e.description || e.type || 'Removal Expense',
+        subtitle: e.type || 'Uncategorized',
+        amount: parseFloat(e.amount) || 0,
+        date: e.date
+      }))
+
+    const usedGoodsExpenseCategories = [
+      { label: 'Collected Pickups Price', value: collectedPickupsPrice, count: collectedPickupsTx.length, transactions: collectedPickupsTx },
+      { label: 'Pending Pickups Advance', value: pendingPickupsAdvance, count: pendingPickupsTx.length, transactions: pendingPickupsTx },
+      { label: 'Other Expenses', value: otherExpenses, count: otherExpensesTx.length, transactions: otherExpensesTx },
+    ].filter(c => c.value > 0 || c.count > 0)
+
+    const usedGoodsRevenueCategories = [
+      { label: 'Delivered Orders Price', value: deliveredOrdersPrice, count: deliveredOrdersTx.length, transactions: deliveredOrdersTx },
+      { label: 'Pending Orders Advance', value: pendingOrdersAdvance, count: pendingOrdersTx.length, transactions: pendingOrdersTx },
+    ].filter(c => c.value > 0 || c.count > 0)
+
+    const removalsRevenueCategories = [
+      { label: 'Removal Orders Total', value: removalsRevenue, count: removalOrdersTx.length, transactions: removalOrdersTx },
+    ].filter(c => c.value > 0 || c.count > 0)
+
+    const removalsExpenseCategories = [
+      { label: 'Removal Expenses', value: removalsExpense, count: removalExpensesTx.length, transactions: removalExpensesTx },
+    ].filter(c => c.value > 0 || c.count > 0)
+
+    return { 
+      usedGoodsRevenue, 
+      usedGoodsExpense, 
+      usedGoodsProfit, 
+      removalsTotalRevenue, 
+      removalsExpense, 
+      removalsProfit,
+      breakdowns: {
+        usedGoodsExpense: usedGoodsExpenseCategories,
+        usedGoodsRevenue: usedGoodsRevenueCategories,
+        usedGoodsProfit: [
+          { label: 'Revenue', value: usedGoodsRevenue, count: usedGoodsRevenueCategories.reduce((sum, c) => sum + c.count, 0), transactions: [...deliveredOrdersTx, ...pendingOrdersTx] },
+          { label: 'Expense (deducted)', value: -usedGoodsExpense, count: usedGoodsExpenseCategories.reduce((sum, c) => sum + c.count, 0), transactions: [...collectedPickupsTx, ...pendingPickupsTx, ...otherExpensesTx] },
+        ],
+        removalsTotalRevenue: removalsRevenueCategories,
+        removalsExpense: removalsExpenseCategories,
+        removalsProfit: [
+          { label: 'Revenue', value: removalsTotalRevenue, count: removalsRevenueCategories.reduce((sum, c) => sum + c.count, 0), transactions: removalOrdersTx },
+          { label: 'Expense (deducted)', value: -removalsExpense, count: removalsExpenseCategories.reduce((sum, c) => sum + c.count, 0), transactions: removalExpensesTx },
+        ],
+      }
+    }
   }, [pickups, orders, expenses, removalOrders, removalsExpenses, selectedMonth, selectedYear, selectedDate, useSpecificDate])
 
   return (
@@ -313,15 +430,16 @@ export default function Dashboard() {
             const t = new Date()
             return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
           })()
-          const callToday = leads.filter((e: any) => e.callBackDate === todayIso)
+          const callToday = leads.filter((e: any) => e.callBackDate === todayIso && e.status !== 'got-booked' && e.status !== 'completed-without-booking')
           const STATUS_LABELS: Record<string, string> = {
             'no-answer': 'No Answer', 'answered': 'Answered',
-            'very-interested': 'Very Interested', 'looking-for-quotes': 'Looking for Quotes', 'completed': 'Completed',
+            'very-interested': 'Very Interested', 'looking-for-quotes': 'Looking for Quotes',
+            'got-booked': 'Got Booked', 'completed-without-booking': 'Completed Without Booking',
           }
           const STATUS_COLORS: Record<string, string> = {
             'no-answer': 'text-gray-400 bg-gray-400/10', 'answered': 'text-blue-400 bg-blue-400/10',
             'very-interested': 'text-green-400 bg-green-400/10', 'looking-for-quotes': 'text-yellow-400 bg-yellow-400/10',
-            'completed': 'text-purple-400 bg-purple-400/10',
+            'got-booked': 'text-purple-400 bg-purple-400/10', 'completed-without-booking': 'text-orange-400 bg-orange-400/10',
           }
           return (
             <div className="mt-8 p-6 bg-white/5 border border-white/10 rounded-2xl">
@@ -375,15 +493,21 @@ export default function Dashboard() {
         editEnquiry={editLead}
       />
 
+      <BreakdownModal
+        isOpen={breakdownModal.isOpen}
+        onClose={() => setBreakdownModal(prev => ({ ...prev, isOpen: false }))}
+        title={breakdownModal.title}
+        total={breakdownModal.total}
+        categories={breakdownModal.categories}
+      />
+
       {isOwner && (
         <div key="filters" className="flex flex-col sm:flex-row gap-4 mt-8 px-4 justify-center lg:justify-end animate-stack-up delay-200">
           <DatePicker
             value={selectedDate}
             onChange={(v) => {
-              console.log('📅 Date selected:', v)
               setSelectedDate(v)
               setUseSpecificDate(!!v)
-              console.log('📅 useSpecificDate set to:', !!v)
             }}
           />
           <select
@@ -432,12 +556,78 @@ export default function Dashboard() {
 
       {isOwner && (
         <div key="cards" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4 pb-8 lg:pb-0 animate-stack-up delay-300">
-          <MetricCard title="Used Goods Expense" value={`£${metrics.usedGoodsExpense.toFixed(2)}`} icon={CreditCard} iconColor="text-orange-400" />
-          <MetricCard title="Used Goods Revenue" value={`£${metrics.usedGoodsRevenue.toFixed(2)}`} icon={Wallet} iconColor="text-green-400" />
-          <MetricCard title="Used Goods Profit" value={`£${metrics.usedGoodsProfit.toFixed(2)}`} icon={PoundSterling} iconColor="text-blue-400" />
-          <MetricCard title="Removals Expense" value={`£${metrics.removalsExpense.toFixed(2)}`} icon={ArrowDownCircle} iconColor="text-red-400" />
-          <MetricCard title="Removals Revenue" value={`£${metrics.removalsTotalRevenue.toFixed(2)}`} icon={TrendingUp} iconColor="text-purple-400" />
-          <MetricCard title="Removals Profit" value={`£${metrics.removalsProfit.toFixed(2)}`} icon={Coins} iconColor="text-yellow-400" />
+          <MetricCard 
+            title="Used Goods Expense" 
+            value={`£${metrics.usedGoodsExpense.toFixed(2)}`} 
+            icon={CreditCard} 
+            iconColor="text-orange-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Used Goods Expense',
+              total: `£${metrics.usedGoodsExpense.toFixed(2)}`,
+              categories: metrics.breakdowns.usedGoodsExpense
+            })}
+          />
+          <MetricCard 
+            title="Used Goods Revenue" 
+            value={`£${metrics.usedGoodsRevenue.toFixed(2)}`} 
+            icon={Wallet} 
+            iconColor="text-green-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Used Goods Revenue',
+              total: `£${metrics.usedGoodsRevenue.toFixed(2)}`,
+              categories: metrics.breakdowns.usedGoodsRevenue
+            })}
+          />
+          <MetricCard 
+            title="Used Goods Profit" 
+            value={`£${metrics.usedGoodsProfit.toFixed(2)}`} 
+            icon={PoundSterling} 
+            iconColor="text-blue-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Used Goods Profit',
+              total: `£${metrics.usedGoodsProfit.toFixed(2)}`,
+              categories: metrics.breakdowns.usedGoodsProfit
+            })}
+          />
+          <MetricCard 
+            title="Removals Expense" 
+            value={`£${metrics.removalsExpense.toFixed(2)}`} 
+            icon={ArrowDownCircle} 
+            iconColor="text-red-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Removals Expense',
+              total: `£${metrics.removalsExpense.toFixed(2)}`,
+              categories: metrics.breakdowns.removalsExpense
+            })}
+          />
+          <MetricCard 
+            title="Removals Revenue" 
+            value={`£${metrics.removalsTotalRevenue.toFixed(2)}`} 
+            icon={TrendingUp} 
+            iconColor="text-purple-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Removals Revenue',
+              total: `£${metrics.removalsTotalRevenue.toFixed(2)}`,
+              categories: metrics.breakdowns.removalsTotalRevenue
+            })}
+          />
+          <MetricCard 
+            title="Removals Profit" 
+            value={`£${metrics.removalsProfit.toFixed(2)}`} 
+            icon={Coins} 
+            iconColor="text-yellow-400" 
+            onClick={() => setBreakdownModal({
+              isOpen: true,
+              title: 'Removals Profit',
+              total: `£${metrics.removalsProfit.toFixed(2)}`,
+              categories: metrics.breakdowns.removalsProfit
+            })}
+          />
         </div>
       )}
       </div>}

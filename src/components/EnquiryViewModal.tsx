@@ -7,7 +7,8 @@ const STATUS_LABELS: Record<string, string> = {
   'answered': 'Answered',
   'very-interested': 'Very Interested',
   'looking-for-quotes': 'Looking for Quotes',
-  'completed': 'Completed',
+  'got-booked': 'Got Booked',
+  'completed-without-booking': 'Completed Without Booking',
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -20,7 +21,8 @@ const STATUS_COLORS: Record<string, string> = {
   'answered': 'text-blue-400 bg-blue-400/10',
   'very-interested': 'text-green-400 bg-green-400/10',
   'looking-for-quotes': 'text-yellow-400 bg-yellow-400/10',
-  'completed': 'text-purple-400 bg-purple-400/10',
+  'got-booked': 'text-purple-400 bg-purple-400/10',
+  'completed-without-booking': 'text-orange-400 bg-orange-400/10',
 }
 
 interface Props {

@@ -5,7 +5,7 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/fi
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
 
-type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'completed'
+type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'got-booked' | 'completed-without-booking'
 type ServiceType = 'removal' | 'clearance'
 
 export interface StatusStage {
@@ -214,7 +214,8 @@ const STATUS_OPTIONS: { value: EnquiryStatus; label: string }[] = [
   { value: 'answered', label: 'Answered' },
   { value: 'very-interested', label: 'Very Interested' },
   { value: 'looking-for-quotes', label: 'Looking for Quotes' },
-  { value: 'completed', label: 'Completed' },
+  { value: 'got-booked', label: 'Got Booked' },
+  { value: 'completed-without-booking', label: 'Completed Without Booking' },
 ]
 
 const today = () => {
@@ -352,7 +353,7 @@ export default function NewEnquiryModal({ isOpen, onClose, editEnquiry }: NewEnq
 
   if (!isOpen) return null
 
-  const showCalendar = formData.status !== 'completed'
+  const showCalendar = formData.status !== 'got-booked' && formData.status !== 'completed-without-booking'
   const isLoading = saving
 
   return (

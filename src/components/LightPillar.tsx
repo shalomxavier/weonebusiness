@@ -61,10 +61,29 @@ const LightPillar: React.FC<LightPillarProps> = ({
     const height = container.clientHeight;
 
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const isLowEndDevice = isMobile || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+    const cpuCores = navigator.hardwareConcurrency || 4;
+    const deviceMemoryGB = (navigator as any).deviceMemory || 4;
+
+    // Detect weak GPU via WebGL renderer string
+    let isWeakGPU = false;
+    try {
+      const testCanvas = document.createElement('canvas');
+      const gl = testCanvas.getContext('webgl') as WebGLRenderingContext | null;
+      if (gl) {
+        const dbgInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (dbgInfo) {
+          const renderer = gl.getParameter(dbgInfo.UNMASKED_RENDERER_WEBGL) as string;
+          isWeakGPU = /Intel|UHD|HD Graphics|Iris|Mesa|llvmpipe|SwiftShader|Microsoft Basic/i.test(renderer);
+        }
+      }
+    } catch (_) { /* ignore */ }
+
+    const isLowEndDesktop = !isMobile && (cpuCores <= 4 || deviceMemoryGB <= 4 || isWeakGPU);
+    const isLowEndDevice = isMobile || isLowEndDesktop;
 
     let effectiveQuality = quality;
-    if (isLowEndDevice && quality === 'high') effectiveQuality = 'medium';
+    if (isLowEndDesktop && quality === 'high') effectiveQuality = 'medium';
+    if (isLowEndDesktop && quality === 'medium') effectiveQuality = 'low';
     if (isMobile && quality !== 'low') effectiveQuality = 'low';
 
     const qualitySettings = {
@@ -317,7 +336,7 @@ const LightPillar: React.FC<LightPillarProps> = ({
 
     // Animation loop with fixed timestep
     let lastTime = performance.now();
-    const targetFPS = effectiveQuality === 'low' ? 30 : 60;
+    const targetFPS = effectiveQuality === 'low' ? 30 : (effectiveQuality === 'medium' && isLowEndDevice ? 45 : 60);
     const frameTime = 1000 / targetFPS;
 
     const animate = (currentTime: number) => {

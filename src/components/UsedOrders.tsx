@@ -252,9 +252,10 @@ export default function UsedOrders() {
       result = result.filter((order) => order.deliveryDate <= toDate)
     }
 
-    // Priority sort: pending nearest to today first, then non-pending newest first
+    // Priority sort: overdue pending first, then future pending nearest to today, then non-pending newest first
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const todayTime = today.getTime()
     result.sort((a, b) => {
       const aPending = a.status === 'pending'
       const bPending = b.status === 'pending'
@@ -263,7 +264,17 @@ export default function UsedOrders() {
       const aDate = new Date(a.deliveryDate).getTime()
       const bDate = new Date(b.deliveryDate).getTime()
       if (aPending && bPending) {
-        return Math.abs(aDate - today.getTime()) - Math.abs(bDate - today.getTime())
+        const aOverdue = aDate < todayTime
+        const bOverdue = bDate < todayTime
+        // Both overdue: sort by most overdue first (further in past = higher priority)
+        if (aOverdue && bOverdue) {
+          return aDate - bDate // Earlier date first (more overdue)
+        }
+        // One overdue, one not: overdue first
+        if (aOverdue && !bOverdue) return -1
+        if (!aOverdue && bOverdue) return 1
+        // Neither overdue: closest to today first
+        return Math.abs(aDate - todayTime) - Math.abs(bDate - todayTime)
       }
       return bDate - aDate
     })
@@ -415,35 +426,52 @@ export default function UsedOrders() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Pending Orders</p>
-            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'pending').length}</p>
+      {/* Stats Cards - filtered by date range only (not search query) */}
+      {(() => {
+        // Apply only date filters for stats (not search query or status filter)
+        let dateFilteredOrders = [...orders]
+        if (fromDate) {
+          dateFilteredOrders = dateFilteredOrders.filter((order) => order.deliveryDate >= fromDate)
+        }
+        if (toDate) {
+          dateFilteredOrders = dateFilteredOrders.filter((order) => order.deliveryDate <= toDate)
+        }
+        const pendingCount = dateFilteredOrders.filter(o => o.status === 'pending').length
+        const deliveredCount = dateFilteredOrders.filter(o => o.status === 'delivered').length
+        const cancelledCount = dateFilteredOrders.filter(o => o.status === 'cancelled').length
+        
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
+            <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+              <div className="flex flex-col gap-2 justify-center">
+                <p className="text-sm font-semibold text-gray-400">Pending Orders</p>
+                <p className="text-3xl font-bold text-white">{pendingCount}</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <Clock className="w-8 h-8 text-orange-400" />
+              </div>
+            </div>
+            <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+              <div className="flex flex-col gap-2 justify-center">
+                <p className="text-sm font-semibold text-gray-400">Delivered Orders</p>
+                <p className="text-3xl font-bold text-white">{deliveredCount}</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-green-400" />
+              </div>
+            </div>
+            <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+              <div className="flex flex-col gap-2 justify-center">
+                <p className="text-sm font-semibold text-gray-400">Cancelled Orders</p>
+                <p className="text-3xl font-bold text-white">{cancelledCount}</p>
+              </div>
+              <div className="flex items-center justify-center">
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+            </div>
           </div>
-          <div className="flex items-center justify-center">
-            <Clock className="w-8 h-8 text-orange-400" />
-          </div>
-        </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Delivered Orders</p>
-            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'delivered').length}</p>
-          </div>
-          <div className="flex items-center justify-center">
-            <CheckCircle2 className="w-8 h-8 text-green-400" />
-          </div>
-        </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Cancelled Orders</p>
-            <p className="text-3xl font-bold text-white">{orders.filter(o => o.status === 'cancelled').length}</p>
-          </div>
-          <div className="flex items-center justify-center">
-            <XCircle className="w-8 h-8 text-red-500" />
-          </div>
-        </div>
-      </div>
+        )
+      })()}
 
       {/* Search, Filter, and Sort Controls */}
       <div className="relative z-10 flex flex-wrap items-center gap-4 w-full animate-stack-up delay-200">

@@ -4,6 +4,19 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-three': ['three'],
+          'vendor-gsap': ['gsap', '@gsap/react'],
+          'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+          'vendor-xlsx': ['xlsx'],
+          'vendor-react': ['react', 'react-dom', 'react-router', 'react-router-dom'],
+        }
+      }
+    }
+  },
   plugins: [
     react(),
     VitePWA({
