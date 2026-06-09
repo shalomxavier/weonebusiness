@@ -1,10 +1,11 @@
 import { X } from 'lucide-react'
 import { FormEvent, useState, useEffect } from 'react'
-import { doc, setDoc, updateDoc } from 'firebase/firestore'
+import { doc, setDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
 
 export interface User {
   id: string
+  userId: string
   name: string
   email: string
   role: 'owner' | 'admin'
@@ -22,9 +23,40 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('admin')
+  const [userId, setUserId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isEditMode = !!editUser
+
+  // Function to get the lowest available 3-digit user ID
+  const getLowestAvailableUserId = async (): Promise<string> => {
+    const usersSnapshot = await getDocs(collection(db, 'users'))
+    const existingUserIds = new Set<string>()
+    
+    usersSnapshot.forEach((doc) => {
+      const userData = doc.data()
+      if (userData.userId) {
+        existingUserIds.add(userData.userId)
+      }
+    })
+    
+    // Find the lowest available 3-digit number (001-999)
+    for (let i = 1; i <= 999; i++) {
+      const userId = i.toString().padStart(3, '0')
+      if (!existingUserIds.has(userId)) {
+        return userId
+      }
+    }
+    
+    throw new Error('No available user IDs. All 3-digit combinations are taken.')
+  }
+
+  // Auto-fill user ID when modal opens for new user
+  useEffect(() => {
+    if (!isEditMode && isOpen) {
+      getLowestAvailableUserId().then(setUserId).catch(console.error)
+    }
+  }, [isEditMode, isOpen])
 
   // Firebase REST API to create user without signing them in
   const createUserViaAPI = async (email: string, password: string) => {
@@ -56,12 +88,14 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
       setName(editUser.name)
       setEmail(editUser.email)
       setRole(editUser.role)
+      setUserId(editUser.userId || '')
       setPassword('')
       setError(null)
     } else {
       setName('')
       setEmail('')
       setRole('admin')
+      setUserId('')
       setPassword('')
       setError(null)
     }
@@ -73,11 +107,22 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
     setLoading(true)
 
     try {
+      // Validate user ID uniqueness
+      if (userId) {
+        const existingUserQuery = query(collection(db, 'users'), where('userId', '==', userId))
+        const existingUserSnapshot = await getDocs(existingUserQuery)
+        
+        if (!existingUserSnapshot.empty && (!editUser || existingUserSnapshot.docs[0].id !== editUser.id)) {
+          throw new Error(`User ID ${userId} is already taken. Please choose a different one.`)
+        }
+      }
+
       if (isEditMode && editUser) {
         // Update existing user - only update Firestore profile
         const userData: Partial<User> = {
           name,
           role: role as 'owner' | 'admin',
+          userId: userId || editUser.userId,
         }
         await updateDoc(doc(db, 'users', editUser.id), userData)
 
@@ -88,17 +133,17 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
         // Create new user
         // Create Firebase Auth user via REST API (doesn't sign them in)
         const result = await createUserViaAPI(email, password)
-        const userId = result.localId
 
         // Create user profile in Firestore
         const userData: User = {
-          id: userId,
+          id: result.localId,
           name,
           email,
           role: role as 'owner' | 'admin',
+          userId: userId,
         }
 
-        await setDoc(doc(db, 'users', userId), userData)
+        await setDoc(doc(db, 'users', result.localId), userData)
 
         if (onSave) {
           onSave(userData)
@@ -110,6 +155,7 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
       setEmail('')
       setPassword('')
       setRole('admin')
+      setUserId('')
       onClose()
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to ${isEditMode ? 'update' : 'create'} user`
@@ -138,6 +184,23 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="userId" className="block text-sm font-medium mb-1">
+              User ID
+            </label>
+            <input
+              type="text"
+              id="userId"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              required
+              disabled={loading}
+              placeholder="Auto-filled"
+              maxLength={3}
+            />
+                      </div>
+
           <div>
             <label htmlFor="name" className="block text-sm font-medium mb-1">
               Name

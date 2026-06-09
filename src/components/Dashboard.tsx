@@ -9,6 +9,7 @@ import { db } from '../lib/firebase'
 import EnquiryViewModal from './EnquiryViewModal'
 import NewEnquiryModal from './NewEnquiryModal'
 import BreakdownModal from './BreakdownModal'
+import ClockIn from './ClockIn'
 import type { Enquiry } from './NewEnquiryModal'
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -134,6 +135,7 @@ export default function Dashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [useSpecificDate, setUseSpecificDate] = useState(false)
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   const [pickups, setPickups] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
@@ -170,6 +172,33 @@ export default function Dashboard() {
   }
 
   const timeGreeting = getTimeBasedGreeting()
+
+  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Format time for different timezones
+  const getFormattedTime = (timezone: string) => {
+    return currentTime.toLocaleTimeString('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  }
+
+  const getFormattedDate = (timezone: string) => {
+    return currentTime.toLocaleDateString('en-GB', {
+      timeZone: timezone,
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+  }
 
   // Fetch static data once with getDocs; keep onSnapshot only for leads (real-time Today's Tasks)
   useEffect(() => {
@@ -437,6 +466,46 @@ export default function Dashboard() {
         <p className="text-lg text-gray-400 mt-3">
           {timeGreeting.greeting}! {timeGreeting.message}
         </p>
+
+        {/* Mobile: clock-in full width, then two time cards half each */}
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
+          <div className="col-span-2">
+            <ClockIn fullWidth />
+          </div>
+          <div className="flex items-center justify-center px-3 py-2 bg-black/60 backdrop-blur-xl border border-blue-500/20 rounded-2xl">
+            <div className="text-center">
+              <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider">India (IST)</p>
+              <p className="text-base font-bold text-white">{getFormattedTime('Asia/Kolkata')}</p>
+              <p className="text-xs text-gray-400">{getFormattedDate('Asia/Kolkata')}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center px-3 py-2 bg-black/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
+            <div className="text-center">
+              <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider">UK (GMT/BST)</p>
+              <p className="text-base font-bold text-white">{getFormattedTime('Europe/London')}</p>
+              <p className="text-xs text-gray-400">{getFormattedDate('Europe/London')}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: fixed top-right */}
+        <div className="fixed top-4 right-4 z-40 hidden lg:flex items-stretch gap-3">
+          <ClockIn />
+          <div className="flex items-center justify-center px-5 py-3 bg-black/60 backdrop-blur-xl border border-blue-500/20 rounded-2xl">
+            <div className="text-center">
+              <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider">India (IST)</p>
+              <p className="text-lg font-bold text-white">{getFormattedTime('Asia/Kolkata')}</p>
+              <p className="text-xs text-gray-400">{getFormattedDate('Asia/Kolkata')}</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center px-5 py-3 bg-black/60 backdrop-blur-xl border border-purple-500/20 rounded-2xl">
+            <div className="text-center">
+              <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider">UK (GMT/BST)</p>
+              <p className="text-lg font-bold text-white">{getFormattedTime('Europe/London')}</p>
+              <p className="text-xs text-gray-400">{getFormattedDate('Europe/London')}</p>
+            </div>
+          </div>
+        </div>
 
         {isOwner && (() => {
           const todayIso = (() => {

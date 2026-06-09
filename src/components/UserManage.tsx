@@ -259,6 +259,7 @@ export default function UserManage() {
             <table className="w-full">
               <thead>
                 <tr>
+                  <th className="text-left px-4 py-3 text-base font-semibold">User ID</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Name</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Role</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Email</th>
@@ -268,6 +269,7 @@ export default function UserManage() {
               <tbody>
                 {filteredUsers.map((user) => (
                   <tr key={user.id}>
+                    <td className="px-4 py-3 text-base font-mono">{user.userId || 'N/A'}</td>
                     <td className="px-4 py-3 text-base">{user.name}</td>
                     <td className="px-4 py-3 text-base">
                       {user.role === 'owner'

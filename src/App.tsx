@@ -8,6 +8,7 @@ import UsedExpenses from './components/UsedExpenses.tsx'
 import RemovalsOrders from './components/RemovalsOrders.tsx'
 import RemovalsExpenses from './components/RemovalsExpenses.tsx'
 import UserManage from './components/UserManage.tsx'
+import AttendanceTable from './components/AttendanceTable.tsx'
 import Leads from './components/Leads.tsx'
 import LoginPage from './components/LoginPage.tsx'
 import ProtectedRoute from './components/ProtectedRoute.tsx'
@@ -46,6 +47,7 @@ function App() {
                   <Route path="removals/orders" element={<RemovalsOrders />} />
                   <Route path="removals/expenses" element={<RemovalsExpenses />} />
                   <Route path="users/manage" element={<UserManage />} />
+                  <Route path="users/attendance" element={<AttendanceTable />} />
                   <Route path="productivity/leads" element={<Leads />} />
                 </Route>
               </Route>

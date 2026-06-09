@@ -1,4 +1,4 @@
-import { X, Crown, Shield, Mail, User as UserIcon } from 'lucide-react'
+import { X, Crown, Shield, Mail, User as UserIcon, Hash } from 'lucide-react'
 import type { User } from './NewUserModal'
 
 interface UserViewModalProps {
@@ -37,6 +37,15 @@ export default function UserViewModal({ isOpen, onClose, user }: UserViewModalPr
             <div className="w-20 h-20 rounded-full bg-purple-500/20 flex items-center justify-center">
               <UserIcon className="w-10 h-10 text-purple-400" />
             </div>
+          </div>
+
+          {/* User ID */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold tracking-widest text-gray-500 uppercase flex items-center gap-2">
+              <Hash className="w-3 h-3" />
+              User ID
+            </p>
+            <p className="text-lg text-gray-200 font-mono">{user.userId || 'N/A'}</p>
           </div>
 
           {/* Name */}
