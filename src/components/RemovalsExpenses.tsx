@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, TrendingUp } from 'lucide-react'
+import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import * as XLSX from 'xlsx'
@@ -406,7 +406,7 @@ export default function RemovalsExpenses() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-stack-up delay-100">
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
           <div className="flex flex-col gap-2 justify-center">
             <p className="text-sm font-semibold text-gray-400">Total Expenses</p>
@@ -423,15 +423,6 @@ export default function RemovalsExpenses() {
           </div>
           <div className="flex items-center justify-center">
             <span className="text-3xl font-bold text-green-400">£</span>
-          </div>
-        </div>
-        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4 hover:-translate-y-1 transition-transform duration-300 cursor-pointer">
-          <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Avg Per Expense</p>
-            <p className="text-3xl font-bold text-white">£{filteredExpenses.length > 0 ? (grandTotal / filteredExpenses.length).toFixed(2) : '0.00'}</p>
-          </div>
-          <div className="flex items-center justify-center">
-            <TrendingUp className="w-8 h-8 text-purple-400" />
           </div>
         </div>
       </div>
