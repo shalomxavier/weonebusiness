@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Search, Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X, ChevronDown, User } from 'lucide-react'
 
 interface AttendanceRecord {
   id: string
@@ -30,6 +30,78 @@ function formatDuration(clockIn: Date, clockOut: Date): string {
 }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+interface UserOption {
+  id: string
+  name: string
+  email: string
+}
+
+function UserDropdown({ value, onChange, users }: { value: string; onChange: (v: string) => void; users: UserOption[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const selected = users.find((u) => u.id === value)
+  const label = selected ? selected.name : 'All Users'
+
+  return (
+    <div ref={ref} className="relative min-w-[160px]">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full h-10 flex items-center gap-2 px-3 bg-white/10 border border-white/20 rounded-xl text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
+      >
+        <User className="w-4 h-4 text-purple-400 flex-shrink-0" />
+        <span className={`flex-1 text-left truncate ${value ? 'text-white font-medium' : 'text-gray-400'}`}>{label}</span>
+        {value && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onChange('') }}
+            className="text-gray-400 hover:text-white"
+          >
+            <X className="w-3 h-3" />
+          </span>
+        )}
+        {!value && <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />}
+      </button>
+      {open && (
+        <ul className="absolute z-[200] mt-1 w-full min-w-[200px] bg-[#111] border border-white/10 rounded-2xl overflow-hidden shadow-xl max-h-60 overflow-y-auto">
+          <li>
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false) }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                !value ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              All Users
+            </button>
+          </li>
+          {users.map((u) => (
+            <li key={u.id}>
+              <button
+                type="button"
+                onClick={() => { onChange(u.id); setOpen(false) }}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  value === u.id ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {u.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -124,7 +196,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
         ref={btnRef}
         type="button"
         onClick={openCalendar}
-        className="flex items-center gap-2 px-3 py-2.5 bg-white/10 border border-white/20 rounded-xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
+        className="h-10 flex items-center gap-2 px-3 bg-white/10 border border-white/20 rounded-xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
       >
         <CalendarDays className="w-4 h-4 text-purple-400 flex-shrink-0" />
         <span className={`text-sm ${value ? 'text-white font-medium' : 'text-gray-400'}`}>{display}</span>
@@ -142,11 +214,25 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 export default function AttendanceTable() {
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [useSpecificDate, setUseSpecificDate] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [users, setUsers] = useState<UserOption[]>([])
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'users'), (snap) => {
+      const list: UserOption[] = []
+      snap.forEach((d) => {
+        const data = d.data()
+        list.push({ id: d.id, name: data.name || data.displayName || data.email || d.id, email: data.email || '' })
+      })
+      list.sort((a, b) => a.name.localeCompare(b.name))
+      setUsers(list)
+    })
+    return () => unsub()
+  }, [])
 
   useEffect(() => {
     const q = query(collection(db, 'attendance'), orderBy('clockIn', 'desc'))
@@ -170,18 +256,26 @@ export default function AttendanceTable() {
       return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear
     })
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      result = result.filter(
-        (r) =>
-          r.userName.toLowerCase().includes(q) ||
-          r.userEmail.toLowerCase().includes(q) ||
-          r.userCode.toLowerCase().includes(q)
-      )
+    if (selectedUserId) {
+      result = result.filter((r) => r.userId === selectedUserId)
     }
 
     return result
-  }, [records, searchQuery, selectedDate, useSpecificDate, selectedMonth, selectedYear])
+  }, [records, selectedDate, useSpecificDate, selectedMonth, selectedYear, selectedUserId])
+
+  const totalWorkingSeconds = useMemo(() => {
+    if (!selectedUserId) return null
+    return filtered.reduce((acc, r) => {
+      if (!r.clockOut) return acc
+      return acc + Math.floor((r.clockOut.toDate().getTime() - r.clockIn.toDate().getTime()) / 1000)
+    }, 0)
+  }, [filtered, selectedUserId])
+
+  const formatTotalDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600)
+    const m = Math.floor((secs % 3600) / 60)
+    return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`
+  }
 
   return (
     <div className="p-8 pt-20 space-y-6">
@@ -194,17 +288,12 @@ export default function AttendanceTable() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search by name, email or ID…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-black/40 backdrop-blur-xl rounded-2xl text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          />
-        </div>
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap items-center">
+        <UserDropdown
+          value={selectedUserId}
+          onChange={setSelectedUserId}
+          users={users}
+        />
         <DatePicker
           value={selectedDate}
           onChange={(v) => { setSelectedDate(v); setUseSpecificDate(!!v) }}
@@ -213,7 +302,7 @@ export default function AttendanceTable() {
           value={useSpecificDate ? '' : selectedMonth}
           onChange={(e) => { if (e.target.value !== '') { setSelectedMonth(parseInt(e.target.value)); setUseSpecificDate(false); setSelectedDate('') } }}
           disabled={useSpecificDate}
-          className="w-auto px-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-10 w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {useSpecificDate && <option value="">Month</option>}
           {MONTHS.map((month, index) => (
@@ -224,7 +313,7 @@ export default function AttendanceTable() {
           value={useSpecificDate ? '' : selectedYear}
           onChange={(e) => { if (e.target.value !== '') { setSelectedYear(parseInt(e.target.value)); setUseSpecificDate(false); setSelectedDate('') } }}
           disabled={useSpecificDate}
-          className="w-auto px-4 py-2.5 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-10 w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {useSpecificDate && <option value="">Year</option>}
           {Array.from({ length: 5 }, (_, i) => {
@@ -233,6 +322,24 @@ export default function AttendanceTable() {
           })}
         </select>
       </div>
+
+      {/* Total Working Hours Summary */}
+      {selectedUserId && totalWorkingSeconds !== null && (
+        <div className="flex items-center gap-4 px-6 py-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+            <Clock className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-gray-500 uppercase">Total Working Hours</p>
+            <p className="text-2xl font-bold text-white font-mono">{formatTotalDuration(totalWorkingSeconds)}</p>
+          </div>
+          <div className="ml-auto text-right">
+            {filtered.some(r => !r.clockOut) && (
+              <p className="text-xs text-yellow-500/80">{filtered.filter(r => !r.clockOut).length} session{filtered.filter(r => !r.clockOut).length > 1 ? 's' : ''} still active</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
