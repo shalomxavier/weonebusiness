@@ -191,12 +191,12 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   ) : null
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-full sm:w-auto">
       <button
         ref={btnRef}
         type="button"
         onClick={openCalendar}
-        className="h-10 flex items-center gap-2 px-3 bg-white/10 border border-white/20 rounded-xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
+        className="h-10 w-full flex items-center gap-2 px-3 bg-white/10 border border-white/20 rounded-xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 hover:bg-white/15 transition-colors"
       >
         <CalendarDays className="w-4 h-4 text-purple-400 flex-shrink-0" />
         <span className={`text-sm ${value ? 'text-white font-medium' : 'text-gray-400'}`}>{display}</span>
@@ -288,7 +288,7 @@ export default function AttendanceTable() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 flex-wrap items-center">
+      <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:flex-wrap sm:items-center">
         <UserDropdown
           value={selectedUserId}
           onChange={setSelectedUserId}
@@ -302,7 +302,7 @@ export default function AttendanceTable() {
           value={useSpecificDate ? '' : selectedMonth}
           onChange={(e) => { if (e.target.value !== '') { setSelectedMonth(parseInt(e.target.value)); setUseSpecificDate(false); setSelectedDate('') } }}
           disabled={useSpecificDate}
-          className="h-10 w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-10 w-full sm:w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {useSpecificDate && <option value="">Month</option>}
           {MONTHS.map((month, index) => (
@@ -313,7 +313,7 @@ export default function AttendanceTable() {
           value={useSpecificDate ? '' : selectedYear}
           onChange={(e) => { if (e.target.value !== '') { setSelectedYear(parseInt(e.target.value)); setUseSpecificDate(false); setSelectedDate('') } }}
           disabled={useSpecificDate}
-          className="h-10 w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-10 w-full sm:w-auto px-4 bg-white/10 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {useSpecificDate && <option value="">Year</option>}
           {Array.from({ length: 5 }, (_, i) => {
