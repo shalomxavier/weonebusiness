@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X, FileText, Image, ExternalLink } from 'lucide-react'
 
 interface RemovalOrder {
   id: string
@@ -16,6 +16,7 @@ interface RemovalOrder {
   endTime: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'completed'
+  attachments?: string[]
 }
 
 interface RemovalViewModalProps {
@@ -115,6 +116,37 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
               </div>
             )}
           </div>
+
+          {(order.attachments?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-2">Attachments</p>
+              <div className="space-y-2">
+                {order.attachments!.map((url) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url)
+                  const fileName = (() => {
+                    try {
+                      const decoded = decodeURIComponent(url.split('/').pop()?.split('?')[0] || url)
+                      const parts = decoded.split('_')
+                      return parts.length > 1 ? parts.slice(1).join('_') : decoded
+                    } catch { return url }
+                  })()
+                  return (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 bg-black/30 border border-white/10 rounded-xl hover:border-purple-500/40 transition-colors group"
+                    >
+                      {isImage ? <Image className="w-4 h-4 flex-shrink-0 text-purple-400" /> : <FileText className="w-4 h-4 flex-shrink-0 text-purple-400" />}
+                      <span className="flex-1 text-sm text-gray-300 truncate group-hover:text-white">{fileName}</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-gray-500 group-hover:text-purple-400" />
+                    </a>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end pt-4">
             <button type="button" onClick={onClose} className="px-6 py-2 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 hover:bg-white/10 transition-colors">

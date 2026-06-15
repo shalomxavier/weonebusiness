@@ -306,9 +306,13 @@ export default function Dashboard() {
     const usedGoodsExpense = allItemCosts + otherExpenses
     const usedGoodsProfit = usedGoodsRevenue - usedGoodsExpense
 
-    const removalsRevenue = filteredRemovals.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
-    // Note: advance is already included in totalPrice, so we don't add it separately
-    const removalsTotalRevenue = removalsRevenue
+    const completedRemovalsPrice = filteredRemovals
+      .filter(r => r.status === 'completed')
+      .reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
+    const pendingRemovalsAdvance = filteredRemovals
+      .filter(r => r.status === 'pending')
+      .reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+    const removalsTotalRevenue = completedRemovalsPrice + pendingRemovalsAdvance
     const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
     const removalsProfit = removalsTotalRevenue - removalsExpense
 
@@ -367,17 +371,27 @@ export default function Dashboard() {
         status: o.status
       }))
 
-    const removalOrdersTx = filteredRemovals
-      .filter(r => parseFloat(r.totalPrice) > 0)
+    const completedRemovalsTx = filteredRemovals
+      .filter(r => r.status === 'completed' && parseFloat(r.totalPrice) > 0)
       .map(r => ({
         id: r.id,
         title: r.removalNumber || r.id.slice(-6),
         subtitle: r.customerName || r.customerPhone || 'Unknown',
         amount: parseFloat(r.totalPrice) || 0,
-        date: r.removalDate
+        date: r.removalDate,
+        status: r.status
       }))
 
-    // Note: advance is part of totalPrice, so we don't show it separately in revenue breakdown
+    const pendingRemovalsTx = filteredRemovals
+      .filter(r => r.status === 'pending' && parseFloat(r.advance) > 0)
+      .map(r => ({
+        id: r.id,
+        title: r.removalNumber || r.id.slice(-6),
+        subtitle: r.customerName || r.customerPhone || 'Unknown',
+        amount: parseFloat(r.advance) || 0,
+        date: r.removalDate,
+        status: r.status
+      }))
 
     const removalExpensesTx = filteredRemovalsExpenses
       .filter(e => parseFloat(e.amount) > 0)
@@ -401,7 +415,8 @@ export default function Dashboard() {
     ].filter(c => c.value > 0 || c.count > 0)
 
     const removalsRevenueCategories = [
-      { label: 'Removal Orders Total', value: removalsRevenue, count: removalOrdersTx.length, transactions: removalOrdersTx },
+      { label: 'Completed Removals Price', value: completedRemovalsPrice, count: completedRemovalsTx.length, transactions: completedRemovalsTx },
+      { label: 'Pending Removals Advance', value: pendingRemovalsAdvance, count: pendingRemovalsTx.length, transactions: pendingRemovalsTx },
     ].filter(c => c.value > 0 || c.count > 0)
 
     const removalsExpenseCategories = [
@@ -425,7 +440,7 @@ export default function Dashboard() {
         removalsTotalRevenue: removalsRevenueCategories,
         removalsExpense: removalsExpenseCategories,
         removalsProfit: [
-          { label: 'Revenue', value: removalsTotalRevenue, count: removalsRevenueCategories.reduce((sum, c) => sum + c.count, 0), transactions: removalOrdersTx },
+          { label: 'Revenue', value: removalsTotalRevenue, count: removalsRevenueCategories.reduce((sum, c) => sum + c.count, 0), transactions: [...completedRemovalsTx, ...pendingRemovalsTx] },
           { label: 'Expense (deducted)', value: -removalsExpense, count: removalsExpenseCategories.reduce((sum, c) => sum + c.count, 0), transactions: removalExpensesTx },
         ],
       }

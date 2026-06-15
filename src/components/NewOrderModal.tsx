@@ -1,4 +1,4 @@
-import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Paperclip, FileText, Image, Trash2 } from 'lucide-react'
 import { FormEvent, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -19,13 +19,14 @@ interface Order {
   additionalNotes: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
+  attachments?: string[]
 }
 
 interface NewOrderModalProps {
   isOpen: boolean
   onClose: () => void
   editOrder?: Order | null
-  onSave?: (order: Order) => void
+  onSave?: (order: Order, newFiles: File[]) => void
 }
 
 function CustomSelect<T extends string>({ value, onChange, options }: {
@@ -285,48 +286,37 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
   )
 }
 
+const emptyOrder: Omit<Order, 'id'> = {
+  itemNumber: '',
+  itemName: '',
+  price: '',
+  advance: '',
+  advanceDate: '',
+  customerName: '',
+  phone: '',
+  address: '',
+  postcode: '',
+  deliveryDate: '',
+  deliveryStartTime: '',
+  deliveryEndTime: '',
+  additionalNotes: '',
+  paymentMethod: 'card',
+  status: 'pending',
+  attachments: [],
+}
+
 export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: NewOrderModalProps) {
-  const [formData, setFormData] = useState<Omit<Order, 'id'>>({  
-    itemNumber: '',
-    itemName: '',
-    price: '',
-    advance: '',
-    advanceDate: '',
-    customerName: '',
-    phone: '',
-    address: '',
-    postcode: '',
-    deliveryDate: '',
-    deliveryStartTime: '',
-    deliveryEndTime: '',
-    additionalNotes: '',
-    paymentMethod: 'card',
-    status: 'pending',
-  })
+  const [formData, setFormData] = useState<Omit<Order, 'id'>>(emptyOrder)
+  const [newFiles, setNewFiles] = useState<File[]>([])
 
   useEffect(() => {
     if (editOrder) {
       setFormData(editOrder)
     } else {
-      setFormData({
-        itemNumber: '',
-        itemName: '',
-        price: '',
-        advance: '',
-        advanceDate: '',
-        customerName: '',
-        phone: '',
-        address: '',
-        postcode: '',
-        deliveryDate: '',
-        deliveryStartTime: '',
-        deliveryEndTime: '',
-        additionalNotes: '',
-        paymentMethod: 'card',
-        status: 'pending',
-      })
+      setFormData(emptyOrder)
     }
-  }, [editOrder])
+    setNewFiles([])
+  }, [editOrder, isOpen])
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -335,9 +325,39 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
       id: editOrder?.id || Date.now().toString(),
     } as Order
     if (onSave) {
-      onSave(orderData)
+      onSave(orderData, newFiles)
     }
     onClose()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files && files.length > 0) {
+      setNewFiles(prev => [...prev, ...Array.from(files)])
+      e.target.value = ''
+    }
+  }
+
+  const removeNewFile = (index: number) => {
+    setNewFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const removeExistingAttachment = (url: string) => {
+    setFormData(prev => ({ ...prev, attachments: (prev.attachments || []).filter(a => a !== url) }))
+  }
+
+  const getFileIcon = (nameOrUrl: string) => {
+    const lower = nameOrUrl.toLowerCase()
+    if (lower.match(/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/)) return <Image className="w-4 h-4 flex-shrink-0" />
+    return <FileText className="w-4 h-4 flex-shrink-0" />
+  }
+
+  const getFileName = (url: string) => {
+    try {
+      const decoded = decodeURIComponent(url.split('/').pop()?.split('?')[0] || url)
+      const parts = decoded.split('_')
+      return parts.length > 1 ? parts.slice(1).join('_') : decoded
+    } catch { return url }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -350,8 +370,8 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
       
       <div className="modal-scroll relative w-full max-w-2xl max-h-[73vh] overflow-y-auto backdrop-blur-2xl border border-white/10 rounded-3xl p-8 text-gray-300">
         <div className="flex items-center justify-between pb-4 mb-6">
@@ -565,6 +585,48 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
                 ]}
               />
             </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium mb-2">Attachments</label>
+            <label className="block border border-dashed border-white/20 rounded-2xl p-4 bg-black/20 cursor-pointer hover:border-purple-500/50 transition-colors">
+              <div className="flex items-center gap-2 text-gray-400 pointer-events-none">
+                <Paperclip className="w-4 h-4" />
+                <span className="text-sm">Attach files</span>
+              </div>
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </label>
+
+            {((formData.attachments?.length ?? 0) > 0 || newFiles.length > 0) && (
+              <div className="mt-3 space-y-2">
+                {(formData.attachments || []).map((url) => (
+                  <div key={url} className="flex items-center gap-2 px-3 py-2 bg-black/30 border border-white/10 rounded-xl">
+                    {getFileIcon(url)}
+                    <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-gray-300 truncate hover:text-white transition-colors">
+                      {getFileName(url)}
+                    </a>
+                    <button type="button" onClick={() => removeExistingAttachment(url)} className="text-gray-500 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {newFiles.map((file, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                    {getFileIcon(file.name)}
+                    <span className="flex-1 text-sm text-gray-300 truncate">{file.name}</span>
+                    <span className="text-xs text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                    <button type="button" onClick={() => removeNewFile(i)} className="text-gray-500 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

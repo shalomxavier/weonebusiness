@@ -5,5 +5,13 @@ service firebase.storage {
     match /leads/{enquiryId}/{fileName} {
       allow read, write: if request.auth != null;
     }
+    // Orders attachments
+    match /orders/{fileName} {
+      allow read, write: if request.auth != null;
+    }
+    // Removal orders attachments
+    match /removalOrders/{fileName} {
+      allow read, write: if request.auth != null;
+    }
   }
 }

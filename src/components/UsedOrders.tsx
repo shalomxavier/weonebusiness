@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
-import { db } from '../lib/firebase'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../lib/firebase'
 import NewOrderModal from './NewOrderModal'
 import OrderViewModal from './OrderViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -25,6 +26,7 @@ interface Order {
   additionalNotes: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
+  attachments?: string[]
 }
 
 const STATUS_OPTIONS = [
@@ -394,13 +396,27 @@ export default function UsedOrders() {
     setSelectedOrder(null)
   }
 
-  const handleSaveOrder = async (order: Order) => {
+  const handleSaveOrder = async (order: Order, newFiles: File[] = []) => {
     const { id, ...orderData } = order
     const existingIndex = orders.findIndex((o) => o.id === id)
+
+    const uploadedUrls: string[] = []
+    for (const file of newFiles) {
+      const fileRef = storageRef(storage, `orders/${id || Date.now()}_${Date.now()}_${file.name}`)
+      const snapshot = await uploadBytes(fileRef, file)
+      const url = await getDownloadURL(snapshot.ref)
+      uploadedUrls.push(url)
+    }
+
+    const finalData = {
+      ...orderData,
+      attachments: [...(orderData.attachments || []), ...uploadedUrls],
+    }
+
     if (existingIndex >= 0) {
-      await updateDoc(doc(db, 'orders', id), orderData)
+      await updateDoc(doc(db, 'orders', id), finalData)
     } else {
-      await addDoc(collection(db, 'orders'), orderData)
+      await addDoc(collection(db, 'orders'), finalData)
     }
   }
 

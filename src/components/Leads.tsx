@@ -202,6 +202,12 @@ export default function Leads() {
     if (statusFilter !== 'all') {
       result = result.filter(e => e.status === statusFilter)
     }
+    result.sort((a, b) => {
+      if (!a.callBackDate && !b.callBackDate) return 0
+      if (!a.callBackDate) return 1
+      if (!b.callBackDate) return -1
+      return a.callBackDate.localeCompare(b.callBackDate)
+    })
     return result
   }, [enquiries, searchQuery, statusFilter])
 
