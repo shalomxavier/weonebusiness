@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore'
+import { collection, onSnapshot, query, orderBy, Timestamp, updateDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X, ChevronDown, User } from 'lucide-react'
+import { Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X, ChevronDown, User, Pencil } from 'lucide-react'
+import ApprovalTable from './ApprovalTable'
 
 interface AttendanceRecord {
   id: string
@@ -12,6 +13,8 @@ interface AttendanceRecord {
   userEmail: string
   clockIn: Timestamp
   clockOut: Timestamp | null
+  clockInApproved: boolean
+  clockOutApproved: boolean
 }
 
 function formatTime(date: Date): string {
@@ -220,6 +223,10 @@ export default function AttendanceTable() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [users, setUsers] = useState<UserOption[]>([])
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null)
+  const [editField, setEditField] = useState<'clockIn' | 'clockOut'>('clockIn')
+  const [editTime, setEditTime] = useState('')
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), (snap) => {
@@ -248,6 +255,8 @@ export default function AttendanceTable() {
 
   const filtered = useMemo(() => {
     let result = records.filter((r) => {
+      if (!r.clockInApproved) return false
+      if (r.clockOut && !r.clockOutApproved) return false
       const d = r.clockIn.toDate()
       if (useSpecificDate && selectedDate) {
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
@@ -277,6 +286,32 @@ export default function AttendanceTable() {
     return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`
   }
 
+  const handleEdit = (record: AttendanceRecord, field: 'clockIn' | 'clockOut') => {
+    setEditingRecord(record)
+    setEditField(field)
+    const time = field === 'clockIn' ? record.clockIn.toDate() : record.clockOut?.toDate()
+    if (time) {
+      setEditTime(time.toISOString().slice(0, 16))
+    }
+    setEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingRecord || !editTime) return
+    try {
+      const newTimestamp = Timestamp.fromDate(new Date(editTime))
+      await updateDoc(doc(db, 'attendance', editingRecord.id), {
+        [editField]: newTimestamp,
+        [editField === 'clockIn' ? 'clockInApproved' : 'clockOutApproved']: false
+      })
+      setEditModalOpen(false)
+      setEditingRecord(null)
+      setEditTime('')
+    } catch (e) {
+      console.error('Failed to update time', e)
+    }
+  }
+
   return (
     <div className="p-8 pt-20 space-y-6">
       {/* Header */}
@@ -286,6 +321,9 @@ export default function AttendanceTable() {
           <h1 className="text-4xl font-semibold leading-tight">Attendance</h1>
         </header>
       </div>
+
+      {/* Approval Table */}
+      <ApprovalTable />
 
       {/* Filters */}
       <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 sm:flex-wrap sm:items-center">
@@ -379,9 +417,33 @@ export default function AttendanceTable() {
                         <p className="text-white font-medium">{record.userName}</p>
                       </td>
                       <td className="px-5 py-3.5 text-gray-300">{formatDate(clockInDate)}</td>
-                      <td className="px-5 py-3.5 text-green-400 font-mono">{formatTime(clockInDate)}</td>
-                      <td className="px-5 py-3.5 text-red-400 font-mono">
-                        {clockOutDate ? formatTime(clockOutDate) : <span className="text-gray-600">—</span>}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-400 font-mono">{formatTime(clockInDate)}</span>
+                          <button
+                            onClick={() => handleEdit(record, 'clockIn')}
+                            className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                            title="Edit clock-in time"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-400 font-mono">
+                            {clockOutDate ? formatTime(clockOutDate) : <span className="text-gray-600">—</span>}
+                          </span>
+                          {clockOutDate && (
+                            <button
+                              onClick={() => handleEdit(record, 'clockOut')}
+                              className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                              title="Edit clock-out time"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-white font-mono">
                         {clockOutDate ? formatDuration(clockInDate, clockOutDate) : <span className="text-gray-600">—</span>}
@@ -394,6 +456,41 @@ export default function AttendanceTable() {
           </div>
         )}
       </div>
+
+      {/* Edit Time Modal */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditModalOpen(false)} />
+          <div className="relative w-full max-w-sm backdrop-blur-2xl border border-white/10 rounded-3xl p-6 text-gray-300">
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Edit {editField === 'clockIn' ? 'Clock In' : 'Clock Out'} Time
+            </h3>
+            <p className="text-sm text-gray-400 mb-4">
+              {editingRecord?.userName}
+            </p>
+            <input
+              type="datetime-local"
+              value={editTime}
+              onChange={(e) => setEditTime(e.target.value)}
+              className="w-full px-4 py-3 bg-black/40 border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-xl text-white hover:bg-white/20 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                className="flex-1 px-4 py-2 bg-purple-600 rounded-xl text-white hover:bg-purple-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

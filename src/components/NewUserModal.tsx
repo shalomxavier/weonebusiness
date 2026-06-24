@@ -1,14 +1,21 @@
-import { X } from 'lucide-react'
-import { FormEvent, useState, useEffect } from 'react'
+import { X, ChevronDown } from 'lucide-react'
+import { FormEvent, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { doc, setDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
+
+const ROLE_OPTIONS = [
+  { value: 'owner', label: 'Director' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'staff', label: 'WeOne Staff' },
+] as const
 
 export interface User {
   id: string
   userId: string
   name: string
   email: string
-  role: 'owner' | 'admin'
+  role: 'owner' | 'admin' | 'staff'
 }
 
 interface NewUserModalProps {
@@ -26,6 +33,10 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
   const [userId, setUserId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
+  const roleDropdownRef = useRef<HTMLDivElement>(null)
+  const roleButtonRef = useRef<HTMLButtonElement>(null)
   const isEditMode = !!editUser
 
   // Function to get the lowest available 3-digit user ID
@@ -50,6 +61,17 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
     
     throw new Error('No available user IDs. All 3-digit combinations are taken.')
   }
+
+  // Close role dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node) && roleButtonRef.current && !roleButtonRef.current.contains(e.target as Node)) {
+        setRoleDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   // Auto-fill user ID when modal opens for new user
   useEffect(() => {
@@ -121,7 +143,7 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
         // Update existing user - only update Firestore profile
         const userData: Partial<User> = {
           name,
-          role: role as 'owner' | 'admin',
+          role: role as 'owner' | 'admin' | 'staff',
           userId: userId || editUser.userId,
         }
         await updateDoc(doc(db, 'users', editUser.id), userData)
@@ -139,7 +161,7 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
           id: result.localId,
           name,
           email,
-          role: role as 'owner' | 'admin',
+          role: role as 'owner' | 'admin' | 'staff',
           userId: userId,
         }
 
@@ -257,16 +279,59 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
             <label htmlFor="role" className="block text-sm font-medium mb-1">
               Role
             </label>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={loading}
-            >
-              <option value="owner">Owner</option>
-              <option value="admin">Admin</option>
-            </select>
+            <div className="relative">
+              <button
+                ref={roleButtonRef}
+                type="button"
+                onClick={() => {
+                  if (roleButtonRef.current) {
+                    const rect = roleButtonRef.current.getBoundingClientRect()
+                    setDropdownPosition({
+                      top: rect.bottom + 4,
+                      left: rect.left,
+                      width: rect.width
+                    })
+                  }
+                  setRoleDropdownOpen((p) => !p)
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={loading}
+              >
+                <span>{ROLE_OPTIONS.find((o) => o.value === role)?.label || 'Select role'}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${roleDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {roleDropdownOpen && createPortal(
+                <div
+                  ref={roleDropdownRef}
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPosition.top,
+                    left: dropdownPosition.left,
+                    width: dropdownPosition.width,
+                    zIndex: 9999
+                  }}
+                >
+                  <ul className="bg-black border border-white/10 rounded-2xl overflow-hidden shadow-xl">
+                    {ROLE_OPTIONS.map((opt) => (
+                      <li key={opt.value}>
+                        <button
+                          type="button"
+                          onClick={() => { setRole(opt.value); setRoleDropdownOpen(false) }}
+                          className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                            role === opt.value
+                              ? 'bg-white/10 text-white'
+                              : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>,
+                document.body
+              )}
+            </div>
           </div>
 
           {error && (

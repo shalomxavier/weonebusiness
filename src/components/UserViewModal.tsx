@@ -8,8 +8,9 @@ interface UserViewModalProps {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  owner: 'Owner',
+  owner: 'Director',
   admin: 'Admin',
+  staff: 'WeOne Staff',
 }
 
 export default function UserViewModal({ isOpen, onClose, user }: UserViewModalProps) {
@@ -74,10 +75,17 @@ export default function UserViewModal({ isOpen, onClose, user }: UserViewModalPr
                     {ROLE_LABELS[user.role]}
                   </span>
                 </>
-              ) : (
+              ) : user.role === 'admin' ? (
                 <>
                   <Shield className="w-5 h-5 text-blue-400" />
                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-300">
+                    {ROLE_LABELS[user.role]}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <UserIcon className="w-5 h-5 text-green-400" />
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500/20 text-green-300">
                     {ROLE_LABELS[user.role]}
                   </span>
                 </>

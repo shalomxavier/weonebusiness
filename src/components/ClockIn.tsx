@@ -13,6 +13,8 @@ interface AttendanceRecord {
   userEmail: string
   clockIn: Timestamp
   clockOut: Timestamp | null
+  clockInApproved: boolean
+  clockOutApproved: boolean
 }
 
 type ToastType = 'in' | 'out'
@@ -121,6 +123,8 @@ export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
         userEmail: user.email || '',
         clockIn: now,
         clockOut: null,
+        clockInApproved: false,
+        clockOutApproved: false,
       }
       const ref = await addDoc(collection(db, 'attendance'), data)
       setActiveRecord({ id: ref.id, ...data })
@@ -137,7 +141,7 @@ export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
     setSubmitting(true)
     try {
       const now = Timestamp.now()
-      await updateDoc(doc(db, 'attendance', activeRecord.id), { clockOut: now })
+      await updateDoc(doc(db, 'attendance', activeRecord.id), { clockOut: now, clockOutApproved: false })
       showToast({ type: 'out', time: formatDateTime(now.toDate()), name: activeRecord.userName, duration: formatDurationShort(elapsed) })
       setActiveRecord(null)
     } catch (e) {

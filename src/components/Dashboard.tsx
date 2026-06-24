@@ -130,6 +130,7 @@ export default function Dashboard() {
   const { user } = useAuth()
   const greeting = `Hi ${user?.displayName || user?.email || 'User'},`
   const isOwner = user?.role === 'owner'
+  const isStaff = user?.role === 'staff'
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
@@ -598,7 +599,7 @@ export default function Dashboard() {
         categories={breakdownModal.categories}
       />
 
-      {isOwner && (
+      {!isStaff && (
         <div key="filters" className="flex flex-col sm:flex-row gap-4 mt-8 px-4 justify-center lg:justify-end animate-stack-up delay-200">
           <DatePicker
             value={selectedDate}
@@ -653,7 +654,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isOwner && (
+      {!isStaff && (
         <div key="cards" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4 pb-8 lg:pb-0 animate-stack-up delay-300">
           <MetricCard 
             title="Used Goods Expense" 

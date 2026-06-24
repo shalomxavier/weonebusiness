@@ -9,8 +9,9 @@ import DeleteConfirmModal from './DeleteConfirmModal'
 
 const ROLE_OPTIONS = [
   { value: 'all', label: 'All Roles' },
-  { value: 'owner', label: 'Owner' },
+  { value: 'owner', label: 'Director' },
   { value: 'admin', label: 'Admin' },
+  { value: 'staff', label: 'WeOne Staff' },
 ] as const
 
 function RoleDropdown({
@@ -18,7 +19,7 @@ function RoleDropdown({
   onChange,
 }: {
   value: string
-  onChange: (v: 'all' | 'owner' | 'admin') => void
+  onChange: (v: 'all' | 'owner' | 'admin' | 'staff') => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -68,7 +69,7 @@ function RoleDropdown({
 
 export default function UserManage() {
   const { user: currentUser } = useAuth()
-  const isOwner = currentUser?.role === 'owner'
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner'
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -80,7 +81,7 @@ export default function UserManage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'admin'>('all')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'admin' | 'staff'>('all')
 
   const filteredUsers = useMemo(() => {
     let result = [...users]
@@ -135,7 +136,7 @@ export default function UserManage() {
   }
 
   const handleEditClick = (user: User) => {
-    if (!isOwner) return
+    if (!isAdmin) return
     setUserToEdit(user)
     setIsModalOpen(true)
   }
@@ -172,14 +173,14 @@ export default function UserManage() {
           <p className="text-sm font-semibold tracking-widest">Users</p>
           <h1 className="text-4xl font-semibold leading-tight">Manage</h1>
         </header>
-        {isOwner && (
+        {isAdmin && (
           <button type="button" onClick={() => setIsModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
             New User
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-stack-up delay-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-stack-up delay-100">
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
           <div className="flex flex-col gap-2 justify-center">
             <p className="text-sm font-semibold text-gray-400">Total Users</p>
@@ -191,7 +192,7 @@ export default function UserManage() {
         </div>
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
           <div className="flex flex-col gap-2 justify-center">
-            <p className="text-sm font-semibold text-gray-400">Owners</p>
+            <p className="text-sm font-semibold text-gray-400">Directors</p>
             <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'owner').length}</p>
           </div>
           <div className="flex items-center justify-center">
@@ -205,6 +206,15 @@ export default function UserManage() {
           </div>
           <div className="flex items-center justify-center">
             <Shield className="w-8 h-8 text-blue-400" />
+          </div>
+        </div>
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
+          <div className="flex flex-col gap-2 justify-center">
+            <p className="text-sm font-semibold text-gray-400">WeOne Staff</p>
+            <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'staff').length}</p>
+          </div>
+          <div className="flex items-center justify-center">
+            <Users className="w-8 h-8 text-green-400" />
           </div>
         </div>
       </div>
@@ -274,7 +284,9 @@ export default function UserManage() {
                     <td className="px-4 py-3 text-base">
                       {user.role === 'owner'
                         ? <Crown className="w-5 h-5 text-purple-400" />
-                        : <Shield className="w-5 h-5 text-blue-400" />}
+                        : user.role === 'admin'
+                        ? <Shield className="w-5 h-5 text-blue-400" />
+                        : <Users className="w-5 h-5 text-green-400" />}
                     </td>
                     <td className="px-4 py-3 text-base">{user.email}</td>
                     <td className="px-4 py-3 text-base text-right">
@@ -286,7 +298,7 @@ export default function UserManage() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {isOwner && (
+                        {isAdmin && (
                           <>
                             <button
                               onClick={() => handleEditClick(user)}

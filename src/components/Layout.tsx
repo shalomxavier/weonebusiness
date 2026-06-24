@@ -131,6 +131,7 @@ export default function Layout() {
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navRef = useRef<HTMLElement>(null)
+  const isStaff = user?.role === 'staff'
 
   const handleLogout = async () => {
     await logout()
@@ -205,85 +206,151 @@ export default function Layout() {
 
   return (
     <div className="h-screen lg:flex text-white">
-      {/* Mobile sidebar backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+      {/* Staff users see simplified layout with minimal sidebar */}
+      {isStaff ? (
+        <>
+          {/* Mobile sidebar backdrop */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+
+          {/* Simplified sidebar for staff */}
+          <div className={`
+            fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-3xl
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          `}>
+            <div className="relative flex items-center h-16 px-6 mt-8">
+              <Link to="/" className="mx-auto">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+              </Link>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="absolute right-6 lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1" />
+
+            <div className="px-4 pb-6 pt-4 space-y-3">
+              <p className="px-4 text-xs font-semibold tracking-widest text-gray-400">{user?.displayName || user?.email}</p>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 px-4 py-3 rounded-2xl text-sm hover:bg-white/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-auto">
+            {/* Mobile top bar */}
+            <div className="lg:hidden flex items-center justify-center px-4 py-4 bg-black/20 backdrop-blur-xl border-b border-white/10 relative">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="absolute left-4 p-2 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              <Link to="/">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+              </Link>
+            </div>
+            <div className="flex-1">
+              <Outlet />
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Mobile sidebar backdrop */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+
+          {/* Sidebar */}
+          <div className={`
+            fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-3xl
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          `}>
+            <div className="relative flex items-center h-16 px-6 mt-8">
+              <Link to="/" className="mx-auto">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+              </Link>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="absolute right-6 lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <nav ref={navRef} className="mt-6 flex-1 overflow-y-auto px-4 pb-6">
+              {navSections.map((section) => {
+                const hasActiveItem = section.items.some(item => location.pathname.startsWith(item.to))
+                const isOpen = hasActiveItem || openSections[section.id]
+
+                return (
+                  <SidebarSection
+                    key={section.id}
+                    section={section}
+                    isOpen={isOpen}
+                    hasActiveItem={hasActiveItem}
+                    onToggle={() => !hasActiveItem && toggleSection(section.id)}
+                    onNavClick={() => setSidebarOpen(false)}
+                    lockNav={() => {
+                      if (!navRef.current) return
+                      navRef.current.style.pointerEvents = 'none'
+                      setTimeout(() => { if (navRef.current) navRef.current.style.pointerEvents = 'auto' }, 500)
+                    }}
+                  />
+                )
+              })}
+            </nav>
+
+            <div className="px-4 pb-6 pt-4 space-y-3">
+              <p className="px-4 text-xs font-semibold tracking-widest text-gray-400">{user?.displayName || user?.email}</p>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 px-4 py-3 rounded-2xl text-sm hover:bg-white/10 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div className="flex-1 min-w-0 flex flex-col overflow-auto">
+            {/* Mobile top bar */}
+            <div className="lg:hidden flex items-center justify-center px-4 py-4 bg-black/20 backdrop-blur-xl border-b border-white/10 relative">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="absolute left-4 p-2 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
+              <Link to="/">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
+              </Link>
+            </div>
+            <div className="flex-1">
+              <Outlet />
+            </div>
+          </div>
+        </>
       )}
-
-      {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-72 bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 lg:h-screen lg:flex lg:flex-col lg:flex-shrink-0 lg:rounded-3xl
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="relative flex items-center h-16 px-6 mt-8">
-          <Link to="/" className="mx-auto">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="absolute right-6 lg:hidden p-2 rounded-xl hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <nav ref={navRef} className="mt-6 flex-1 overflow-y-auto px-4 pb-6">
-          {navSections.map((section) => {
-            const hasActiveItem = section.items.some(item => location.pathname.startsWith(item.to))
-            const isOpen = hasActiveItem || openSections[section.id]
-
-            return (
-              <SidebarSection
-                key={section.id}
-                section={section}
-                isOpen={isOpen}
-                hasActiveItem={hasActiveItem}
-                onToggle={() => !hasActiveItem && toggleSection(section.id)}
-                onNavClick={() => setSidebarOpen(false)}
-                lockNav={() => {
-                  if (!navRef.current) return
-                  navRef.current.style.pointerEvents = 'none'
-                  setTimeout(() => { if (navRef.current) navRef.current.style.pointerEvents = 'auto' }, 500)
-                }}
-              />
-            )
-          })}
-        </nav>
-
-        <div className="px-4 pb-6 pt-4 space-y-3">
-          <p className="px-4 text-xs font-semibold tracking-widest text-gray-400">{user?.displayName || user?.email}</p>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex w-full items-center gap-2 px-4 py-3 rounded-2xl text-sm hover:bg-white/10 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign out
-          </button>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-auto">
-        {/* Mobile top bar */}
-        <div className="lg:hidden flex items-center justify-center px-4 py-4 bg-black/20 backdrop-blur-xl border-b border-white/10 relative">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="absolute left-4 p-2 rounded-xl hover:bg-white/10 transition-colors"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-          <Link to="/">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#5227FF] to-[#FF1493] bg-clip-text text-transparent">WeOne</h1>
-          </Link>
-        </div>
-        <div className="flex-1">
-          <Outlet />
-        </div>
-      </div>
     </div>
   )
 }
