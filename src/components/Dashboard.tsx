@@ -129,7 +129,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 export default function Dashboard() {
   const { user } = useAuth()
   const greeting = `Hi ${user?.displayName || user?.email || 'User'},`
-  const isOwner = user?.role === 'owner'
+  const isOwner = user?.role === 'director'
   const isStaff = user?.role === 'staff'
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())

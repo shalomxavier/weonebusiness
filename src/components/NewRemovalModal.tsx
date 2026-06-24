@@ -18,6 +18,7 @@ interface RemovalOrder {
   endTime: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'completed'
+  type: 'removal' | 'clearance' | 'man_with_van'
   attachments?: string[]
 }
 
@@ -38,6 +39,12 @@ const PAYMENT_METHODS = [
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
   { value: 'completed', label: 'Completed' },
+]
+
+const TYPE_OPTIONS = [
+  { value: 'removal', label: 'Removal' },
+  { value: 'clearance', label: 'Clearance' },
+  { value: 'man_with_van', label: 'Man with Van' },
 ]
 
 function CustomSelect<T extends string>({ value, onChange, options }: {
@@ -126,6 +133,7 @@ const emptyRemoval: Omit<RemovalOrder, 'id'> = {
   endTime: '',
   paymentMethod: 'card',
   status: 'pending',
+  type: 'removal',
   attachments: [],
 }
 
@@ -460,6 +468,15 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Type</label>
+              <CustomSelect
+                value={formData.type}
+                onChange={(v) => setFormData(p => ({ ...p, type: v }))}
+                options={TYPE_OPTIONS as { value: 'removal' | 'clearance' | 'man_with_van'; label: string }[]}
               />
             </div>
 

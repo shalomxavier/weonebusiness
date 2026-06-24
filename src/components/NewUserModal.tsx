@@ -5,7 +5,7 @@ import { doc, setDoc, updateDoc, collection, getDocs, query, where } from 'fireb
 import { db } from '../lib/firebase.ts'
 
 const ROLE_OPTIONS = [
-  { value: 'owner', label: 'Director' },
+  { value: 'director', label: 'Director' },
   { value: 'admin', label: 'Admin' },
   { value: 'staff', label: 'WeOne Staff' },
 ] as const
@@ -15,7 +15,7 @@ export interface User {
   userId: string
   name: string
   email: string
-  role: 'owner' | 'admin' | 'staff'
+  role: 'director' | 'admin' | 'staff'
 }
 
 interface NewUserModalProps {
@@ -143,7 +143,7 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
         // Update existing user - only update Firestore profile
         const userData: Partial<User> = {
           name,
-          role: role as 'owner' | 'admin' | 'staff',
+          role: role as 'director' | 'admin' | 'staff',
           userId: userId || editUser.userId,
         }
         await updateDoc(doc(db, 'users', editUser.id), userData)
@@ -161,7 +161,7 @@ export default function NewUserModal({ isOpen, onClose, onSave, editUser }: NewU
           id: result.localId,
           name,
           email,
-          role: role as 'owner' | 'admin' | 'staff',
+          role: role as 'director' | 'admin' | 'staff',
           userId: userId,
         }
 

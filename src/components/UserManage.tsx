@@ -9,7 +9,7 @@ import DeleteConfirmModal from './DeleteConfirmModal'
 
 const ROLE_OPTIONS = [
   { value: 'all', label: 'All Roles' },
-  { value: 'owner', label: 'Director' },
+  { value: 'director', label: 'Director' },
   { value: 'admin', label: 'Admin' },
   { value: 'staff', label: 'WeOne Staff' },
 ] as const
@@ -19,7 +19,7 @@ function RoleDropdown({
   onChange,
 }: {
   value: string
-  onChange: (v: 'all' | 'owner' | 'admin' | 'staff') => void
+  onChange: (v: 'all' | 'director' | 'admin' | 'staff') => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -69,7 +69,7 @@ function RoleDropdown({
 
 export default function UserManage() {
   const { user: currentUser } = useAuth()
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'owner'
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'director'
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
@@ -81,7 +81,7 @@ export default function UserManage() {
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'admin' | 'staff'>('all')
+  const [roleFilter, setRoleFilter] = useState<'all' | 'director' | 'admin' | 'staff'>('all')
 
   const filteredUsers = useMemo(() => {
     let result = [...users]
@@ -193,7 +193,7 @@ export default function UserManage() {
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-5 flex items-stretch justify-between gap-4">
           <div className="flex flex-col gap-2 justify-center">
             <p className="text-sm font-semibold text-gray-400">Directors</p>
-            <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'owner').length}</p>
+            <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'director').length}</p>
           </div>
           <div className="flex items-center justify-center">
             <Crown className="w-8 h-8 text-purple-400" />
@@ -282,7 +282,7 @@ export default function UserManage() {
                     <td className="px-4 py-3 text-base font-mono">{user.userId || 'N/A'}</td>
                     <td className="px-4 py-3 text-base">{user.name}</td>
                     <td className="px-4 py-3 text-base">
-                      {user.role === 'owner'
+                      {user.role === 'director'
                         ? <Crown className="w-5 h-5 text-purple-400" />
                         : user.role === 'admin'
                         ? <Shield className="w-5 h-5 text-blue-400" />

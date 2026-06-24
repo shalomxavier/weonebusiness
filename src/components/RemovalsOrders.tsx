@@ -25,6 +25,7 @@ interface RemovalOrder {
   endTime: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'completed'
+  type: 'removal' | 'clearance' | 'man_with_van'
   attachments?: string[]
 }
 
@@ -530,6 +531,7 @@ export default function RemovalsOrders() {
                   <th className="text-left px-4 py-3 text-base font-semibold">Customer Name</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Phone Number</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Postcode</th>
+                  <th className="text-left px-4 py-3 text-base font-semibold">Type</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Status</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Date</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Amount</th>
@@ -542,6 +544,9 @@ export default function RemovalsOrders() {
                     <td className="px-4 py-3 text-base">{order.customerName}</td>
                     <td className="px-4 py-3 text-base">{order.phone}</td>
                     <td className="px-4 py-3 text-base">{order.postcode}</td>
+                    <td className="px-4 py-3 text-base">
+                      {order.type === 'removal' ? 'Removal' : order.type === 'clearance' ? 'Clearance' : 'Man with Van'}
+                    </td>
                     <td className="px-4 py-3 text-base">
                       {order.status === 'pending'
                         ? <Clock className="w-5 h-5 text-orange-400" />

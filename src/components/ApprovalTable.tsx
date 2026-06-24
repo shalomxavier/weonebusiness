@@ -33,7 +33,7 @@ function formatDuration(clockIn: Date, clockOut: Date): string {
 
 export default function ApprovalTable() {
   const { user } = useAuth()
-  const isOwner = user?.role === 'owner'
+  const isOwner = user?.role === 'director'
   const [records, setRecords] = useState<AttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [selectionMode, setSelectionMode] = useState(false)
