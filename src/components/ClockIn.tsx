@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckCircle2 } from 'lucide-react'
-import { collection, addDoc, query, where, onSnapshot, updateDoc, doc, getDoc, Timestamp } from 'firebase/firestore'
+import { collection, addDoc, query, where, onSnapshot, updateDoc, doc, getDoc, Timestamp, orderBy, limit } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
 
@@ -36,7 +36,7 @@ function formatDuration(seconds: number): string {
 function formatDurationShort(seconds: number): string {
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
-  return [h, m].map((v) => String(v).padStart(2, '0')).join(':')
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
 function formatTime(date: Date): string {
@@ -51,6 +51,7 @@ function formatDateTime(date: Date): string {
 export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
   const { user } = useAuth()
   const [activeRecord, setActiveRecord] = useState<AttendanceRecord | null>(null)
+  const [lastRecord, setLastRecord] = useState<AttendanceRecord | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -81,6 +82,24 @@ export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
     }, (e) => {
       console.error('Failed to load attendance', e)
       setLoading(false)
+    })
+    return () => unsubscribe()
+  }, [user])
+
+  // Real-time listener for the last completed session
+  useEffect(() => {
+    if (!user) return
+    const q = query(
+      collection(db, 'attendance'),
+      where('userId', '==', user.uid),
+      orderBy('clockIn', 'desc'),
+      limit(5)
+    )
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const completed = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as AttendanceRecord))
+        .find((r) => r.clockOut !== null)
+      setLastRecord(completed ?? null)
     })
     return () => unsubscribe()
   }, [user])
@@ -181,16 +200,36 @@ export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
             </p>
           )}
         </button>
+        {!isClockedIn && lastRecord && lastRecord.clockOut && (
+          <div className={`flex items-center justify-center px-5 py-3 bg-white/5 border border-white/10 rounded-2xl ${fullWidth ? 'flex-1 basis-0 min-w-0' : ''}`}>
+            <div className="text-center">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Last out</p>
+              <p className={`text-${fullWidth ? 'xl' : '2xl'} font-bold text-white`}>{formatTime(lastRecord.clockOut.toDate())}</p>
+              <p className="text-xs font-mono text-gray-400 mt-0.5">{formatDurationShort(Math.floor((lastRecord.clockOut.toDate().getTime() - lastRecord.clockIn.toDate().getTime()) / 1000))}</p>
+              {lastRecord.clockOutApproved
+                ? <p className="text-xs font-semibold text-green-400 mt-0.5">Approved</p>
+                : <p className="text-xs font-semibold text-red-400 mt-0.5">Not approved yet</p>}
+            </div>
+          </div>
+        )}
         {isClockedIn && (
           <div className={`flex items-center justify-center px-5 py-3 bg-green-500/10 border border-green-500/20 rounded-2xl ${fullWidth ? 'flex-1 basis-0 min-w-0' : ''}`}>
             {fullWidth ? (
               <div className="text-center">
-                <p className="text-xs invisible">_</p>
+                <p className="text-xs font-semibold text-green-400/70 uppercase tracking-wider">Started at {formatTime(activeRecord!.clockIn.toDate())}</p>
                 <p className="text-xl font-bold text-white">{formatDuration(elapsed)}</p>
-                <p className="text-xs invisible">_</p>
+                {!activeRecord!.clockInApproved
+                  ? <p className="text-xs font-semibold text-red-400 mt-0.5">Not approved yet</p>
+                  : <p className="text-xs invisible">_</p>}
               </div>
             ) : (
-              <p className="text-2xl font-bold text-white">{formatDuration(elapsed)}</p>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-green-400/70 uppercase tracking-wider">Started at {formatTime(activeRecord!.clockIn.toDate())}</p>
+                <p className="text-2xl font-bold text-white">{formatDuration(elapsed)}</p>
+                {!activeRecord!.clockInApproved && (
+                  <p className="text-xs font-semibold text-red-400 mt-0.5">Not approved yet</p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -216,7 +255,11 @@ export default function ClockIn({ fullWidth }: { fullWidth?: boolean } = {}) {
                 <p className="text-2xl font-mono font-bold text-white">{toast.duration}</p>
               </div>
             ) : (
-              <p className="text-sm text-gray-400 mt-1">{toast.time}</p>
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Clocked In At</p>
+                <p className="text-2xl font-mono font-bold text-white">{toast.time.split(' · ')[1]}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{toast.time.split(' · ')[0]}</p>
+              </div>
             )}
             <button
               type="button"
