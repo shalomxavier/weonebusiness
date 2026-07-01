@@ -128,6 +128,7 @@ export default function NewExpenseModal({ isOpen, onClose, onSave, editExpense }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (!formData.type || !formData.mode || !formData.amount || !formData.date) return
     if (!billFile && !formData.billUrl) return
     let billUrl = formData.billUrl || ''
     if (billFile) {
@@ -296,7 +297,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
           <div className="space-y-4">
             <div>
               <label htmlFor="type" className="block text-sm font-medium mb-1">
-                Expense Type
+                Expense Type <span className="text-red-400">*</span>
               </label>
               <CustomSelect
                 value={formData.type}
@@ -306,7 +307,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Expense Mode</label>
+              <label className="block text-sm font-medium mb-1">Expense Mode <span className="text-red-400">*</span></label>
               <CustomSelect
                 value={formData.mode}
                 onChange={(v) => setFormData(p => ({ ...p, mode: v }))}
@@ -317,7 +318,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
 
             <div>
               <label htmlFor="amount" className="block text-sm font-medium mb-1">
-                Amount
+                Amount <span className="text-red-400">*</span>
               </label>
               <input
                 type="number"
@@ -333,7 +334,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Date</label>
+              <label className="block text-sm font-medium mb-1">Date <span className="text-red-400">*</span></label>
               <DatePicker
                 value={formData.date}
                 onChange={(v) => setFormData(p => ({ ...p, date: v }))}
@@ -360,7 +361,7 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
               <label className="block text-sm font-medium mb-1">Document <span className="text-red-400">*</span></label>
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className={`flex items-center gap-3 w-full px-3 py-2 bg-black/40 backdrop-blur-xl border rounded-2xl text-gray-300 cursor-pointer hover:border-purple-500/50 transition-colors ${!billFile && !formData.billUrl ? 'border-red-500/40' : 'border-white/10'}`}
+                className="flex items-center gap-3 w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 cursor-pointer hover:border-purple-500/50 transition-colors"
               >
                 {billFile ? (
                   <>

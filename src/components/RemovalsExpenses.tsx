@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import NewExpenseModal from './NewExpenseModal'
 import ExpenseViewModal from './ExpenseViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -330,58 +330,160 @@ export default function RemovalsExpenses() {
   }, [filteredExpenses.length])
 
   // Export to Excel
-  const handleExport = (month: number, year: number) => {
-    // Filter expenses by selected month and year
-    const monthExpenses = expenses.filter(expense => {
-      const expenseDate = new Date(expense.date)
-      return expenseDate.getMonth() === month && expenseDate.getFullYear() === year
-    })
-
-    // Prepare expense data for export
-    const expenseData = monthExpenses.map((expense, index) => ({
-      'No.': index + 1,
-      'Type': expense.type.charAt(0).toUpperCase() + expense.type.slice(1),
-      'Amount': parseFloat(expense.amount),
-      'Date': expense.date,
-      'Notes': expense.notes || '-',
-    }))
-
-    // Calculate totals for the selected month
-    const monthlyTotal = monthExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0)
-    const monthlyTotalsByType: Record<string, number> = {}
-    monthExpenses.forEach(expense => {
-      monthlyTotalsByType[expense.type] = (monthlyTotalsByType[expense.type] || 0) + parseFloat(expense.amount)
-    })
-
-    // Prepare summary data
-    const summaryData = [
-      ['Summary by Type', ''],
-      ['Type', 'Total'],
-      ...Object.entries(monthlyTotalsByType).map(([type, total]) => [
-        type.charAt(0).toUpperCase() + type.slice(1),
-        total,
-      ]),
-      ['', ''],
-      ['Grand Total', monthlyTotal],
-    ]
-
-    // Create workbook
-    const wb = XLSX.utils.book_new()
-
-    // Create expenses sheet
-    const wsExpenses = XLSX.utils.json_to_sheet(expenseData)
-    XLSX.utils.book_append_sheet(wb, wsExpenses, 'Expenses')
-
-    // Create summary sheet
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
-
-    // Generate filename with month and year
+  const handleExport = async (month: number, year: number) => {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const filename = `RemovalsExpenses_${monthNames[month]}_${year}.xlsx`
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-    // Download file
-    XLSX.writeFile(wb, filename)
+    const monthExpenses = expenses.filter(expense => {
+      const d = new Date(expense.date)
+      return d.getMonth() === month && d.getFullYear() === year
+    })
+
+    const HEADER_BG = 'FF6A1B9A'
+    const HEADER_FG = 'FFFFFFFF'
+    const TOTAL_BG = 'FFE8D5F5'
+    const TOTAL_FG = 'FF4A148C'
+    const ALT_BG = 'FFF3E5FF'
+    const DEF_BG = 'FFFFFFFF'
+    const DEF_FG = 'FF212121'
+    const BORDER_COLOR = 'FFCE93D8'
+
+    const thinBorder = (): Partial<ExcelJS.Borders> => ({
+      top: { style: 'thin', color: { argb: BORDER_COLOR } },
+      left: { style: 'thin', color: { argb: BORDER_COLOR } },
+      bottom: { style: 'thin', color: { argb: BORDER_COLOR } },
+      right: { style: 'thin', color: { argb: BORDER_COLOR } },
+    })
+
+    const styleHeader = (row: ExcelJS.Row) => {
+      row.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
+        cell.font = { bold: true, color: { argb: HEADER_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+        cell.border = thinBorder()
+      })
+      row.height = 22
+    }
+
+    const colAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+      if (col === 4) return 'right'   // Amount
+      if (col === 5) return 'center'  // Date
+      return 'left'
+    }
+
+    const styleData = (row: ExcelJS.Row, altRow: boolean) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: altRow ? ALT_BG : DEF_BG } }
+        cell.font = { color: { argb: DEF_FG }, size: 12 }
+        cell.alignment = { vertical: 'middle', horizontal: colAlign(col) }
+        cell.border = thinBorder()
+      })
+      row.height = 18
+    }
+
+    const styleTotal = (row: ExcelJS.Row, amountCol = 4) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
+        cell.font = { bold: true, color: { argb: TOTAL_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: col === amountCol ? 'right' : 'left' }
+        cell.border = thinBorder()
+      })
+      row.height = 20
+    }
+
+    const buildModeSheet = (ws: ExcelJS.Worksheet, modeExpenses: typeof monthExpenses, modeName: string) => {
+      ws.columns = [
+        { key: 'no', width: 6 },
+        { key: 'cat', width: 26 },
+        { key: 'mode', width: 16 },
+        { key: 'amount', width: 14 },
+        { key: 'date', width: 14 },
+        { key: 'notes', width: 36 },
+      ]
+
+      const headerRow = ws.addRow(['No.', 'Category', 'Mode', 'Amount', 'Date', 'Notes'])
+      styleHeader(headerRow)
+
+      const byCategory: Record<string, typeof monthExpenses> = {}
+      modeExpenses.forEach(e => {
+        const cat = cap(e.type)
+        if (!byCategory[cat]) byCategory[cat] = []
+        byCategory[cat].push(e)
+      })
+
+      let globalNo = 1
+      let modeTotal = 0
+      let dataRowIndex = 0
+
+      Object.entries(byCategory).forEach(([cat, items]) => {
+        items.forEach(e => {
+          const amt = parseFloat(e.amount)
+          const row = ws.addRow([globalNo++, cat, modeName, `£${amt.toFixed(2)}`, e.date, e.notes || '-'])
+          styleData(row, dataRowIndex % 2 === 1)
+          dataRowIndex++
+          modeTotal += amt
+        })
+      })
+
+      ws.addRow([])
+      const totalRow = ws.addRow(['', 'TOTAL', '', `£${modeTotal.toFixed(2)}`, '', ''])
+      styleTotal(totalRow)
+    }
+
+    const buildSummarySheet = (ws: ExcelJS.Worksheet, cashTotal: number, bankTotal: number, otherTotal: number, grandTotal: number) => {
+      ws.columns = [
+        { key: 'mode', width: 22 },
+        { key: 'total', width: 16 },
+      ]
+
+      const headerRow = ws.addRow(['Payment Mode', 'Total'])
+      styleHeader(headerRow)
+
+      const rows = [
+        ['Cash', `£${cashTotal.toFixed(2)}`],
+        ['Bank Payment', `£${bankTotal.toFixed(2)}`],
+        ...(otherTotal > 0 ? [['Unspecified', `£${otherTotal.toFixed(2)}`]] : []),
+      ]
+      rows.forEach((r, i) => {
+        const row = ws.addRow(r)
+        row.eachCell({ includeEmpty: true }, (cell, col) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 1 ? ALT_BG : DEF_BG } }
+          cell.font = { color: { argb: DEF_FG }, size: 12 }
+          cell.alignment = { vertical: 'middle', horizontal: col === 2 ? 'right' : 'left' }
+          cell.border = thinBorder()
+        })
+        row.height = 18
+      })
+
+      ws.addRow([])
+      const totalRow = ws.addRow(['Grand Total', `£${grandTotal.toFixed(2)}`])
+      styleTotal(totalRow, 2)
+    }
+
+    const cashExpenses = monthExpenses.filter(e => (e.mode || '').toLowerCase() === 'cash')
+    const bankExpenses = monthExpenses.filter(e => (e.mode || '').toLowerCase() === 'bank payment')
+    const otherExpenses = monthExpenses.filter(e => !['cash', 'bank payment'].includes((e.mode || '').toLowerCase()))
+
+    const cashTotal = cashExpenses.reduce((s, e) => s + parseFloat(e.amount), 0)
+    const bankTotal = bankExpenses.reduce((s, e) => s + parseFloat(e.amount), 0)
+    const otherTotal = otherExpenses.reduce((s, e) => s + parseFloat(e.amount), 0)
+    const grandTotal = cashTotal + bankTotal + otherTotal
+
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'We One Business'
+    buildModeSheet(wb.addWorksheet('Cash'), cashExpenses, 'Cash')
+    buildModeSheet(wb.addWorksheet('Bank Payment'), bankExpenses, 'Bank Payment')
+    if (otherExpenses.length > 0) buildModeSheet(wb.addWorksheet('Unspecified'), otherExpenses, 'Unspecified')
+    buildSummarySheet(wb.addWorksheet('Summary'), cashTotal, bankTotal, otherTotal, grandTotal)
+
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `RemovalsExpenses_${monthNames[month]}_${year}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
