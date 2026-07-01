@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
+import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import NewPickupModal from './NewPickupModal'
 import PickupViewModal from './PickupViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
-import ExportModal from './ExportModal'
-import * as XLSX from 'xlsx'
 
 interface Pickup {
   id: string
@@ -24,7 +22,7 @@ interface Pickup {
   pickupEndTime: string
   additionalNotes: string
   status: 'pending' | 'collected' | 'cancelled'
-  paymentMethod: 'card' | 'cash' | 'both'
+  paymentMethod: 'bank' | 'cash' | 'both' | ''
 }
 
 const STATUS_OPTIONS = [
@@ -194,7 +192,7 @@ export default function UsedPickups() {
     const q = query(collection(db, 'pickups'), orderBy('pickupDate', 'desc'))
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const pickupsData = snapshot.docs.map((doc) => ({
-        paymentMethod: 'card',
+        paymentMethod: '',
         id: doc.id,
         ...doc.data(),
       })) as Pickup[]
@@ -208,8 +206,6 @@ export default function UsedPickups() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedPickup, setSelectedPickup] = useState<Pickup | null>(null)
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
-
   // Search, filter, and sort states
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'collected' | 'cancelled'>('all')
@@ -270,73 +266,6 @@ export default function UsedPickups() {
 
     return result
   }, [pickups, searchQuery, statusFilter, fromDate, toDate])
-
-  // Export to Excel
-  const handleExport = (month: number, year: number) => {
-    // Filter pickups by selected month and year
-    const monthPickups = pickups.filter(pickup => {
-      const pickupDate = new Date(pickup.pickupDate)
-      return pickupDate.getMonth() === month && pickupDate.getFullYear() === year
-    })
-
-    // Prepare pickup data for export
-    const pickupData = monthPickups.map((pickup, index) => ({
-      'No.': index + 1,
-      'Pickup Number': pickup.pickupNumber,
-      'Item Name': pickup.itemName,
-      'Price': parseFloat(pickup.price),
-      'Advance': parseFloat(pickup.advance),
-      'Balance': parseFloat(pickup.price) - parseFloat(pickup.advance),
-      'Customer Name': pickup.customerName,
-      'Phone': pickup.phone,
-      'Address': pickup.address,
-      'Postcode': pickup.postcode,
-      'Pickup Date': pickup.pickupDate,
-      'Pickup Time': `${pickup.pickupStartTime} - ${pickup.pickupEndTime}`,
-      'Status': pickup.status.charAt(0).toUpperCase() + pickup.status.slice(1),
-      'Notes': pickup.additionalNotes || '-',
-    }))
-
-    // Calculate totals for the selected month
-    const monthlyTotal = monthPickups.reduce((sum, pickup) => sum + parseFloat(pickup.price), 0)
-    const monthlyAdvance = monthPickups.reduce((sum, pickup) => sum + parseFloat(pickup.advance), 0)
-    const monthlyBalance = monthlyTotal - monthlyAdvance
-    const pendingCount = monthPickups.filter(p => p.status === 'pending').length
-    const collectedCount = monthPickups.filter(p => p.status === 'collected').length
-    const cancelledCount = monthPickups.filter(p => p.status === 'cancelled').length
-
-    // Prepare summary data
-    const summaryData = [
-      ['Pickup Summary', ''],
-      ['Total Pickups', monthPickups.length],
-      ['Pending', pendingCount],
-      ['Collected', collectedCount],
-      ['Cancelled', cancelledCount],
-      ['', ''],
-      ['Financial Summary', ''],
-      ['Total Revenue', monthlyTotal],
-      ['Total Advance', monthlyAdvance],
-      ['Total Balance', monthlyBalance],
-    ]
-
-    // Create workbook
-    const wb = XLSX.utils.book_new()
-
-    // Create pickups sheet
-    const wsPickups = XLSX.utils.json_to_sheet(pickupData)
-    XLSX.utils.book_append_sheet(wb, wsPickups, 'Pickups')
-
-    // Create summary sheet
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
-
-    // Generate filename with month and year
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const filename = `Pickups_${monthNames[month]}_${year}.xlsx`
-
-    // Download file
-    XLSX.writeFile(wb, filename)
-  }
 
   // Clear all filters
   const clearFilters = () => {
@@ -405,14 +334,6 @@ export default function UsedPickups() {
           <h1 className="text-4xl font-semibold leading-tight">Pickups</h1>
         </header>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
-            title="Export to Excel"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
           <button type="button" onClick={() => setIsCreateModalOpen(true)} className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10">
             New Pickup
           </button>
@@ -661,12 +582,6 @@ export default function UsedPickups() {
         itemName={selectedPickup ? `${selectedPickup.itemName} - ${selectedPickup.customerName}` : ''}
       />
 
-      <ExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
-        onExport={handleExport}
-        title="Export Pickups"
-      />
     </section>
   )
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, TrendingUp } from 'lucide-react'
-import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import ExcelJS from 'exceljs'
 import NewExpenseModal from './NewExpenseModal'
@@ -339,6 +339,38 @@ export default function UsedExpenses() {
       return d.getMonth() === month && d.getFullYear() === year
     })
 
+    // Fetch pickups and normalise into expense rows
+    const pickupSnap = await getDocs(collection(db, 'pickups'))
+    const pickupExpenses: Expense[] = []
+    pickupSnap.forEach(docSnap => {
+      const p = docSnap.data() as {
+        pickupDate: string
+        price: string
+        paymentMethod: string
+        bankAmount?: string
+        cashAmount?: string
+        additionalNotes?: string
+      }
+      if (!p.pickupDate) return
+      const d = new Date(p.pickupDate)
+      if (d.getMonth() !== month || d.getFullYear() !== year) return
+      const label = p.additionalNotes || ''
+      const pm = (p.paymentMethod || '').toLowerCase()
+      if (pm === 'both') {
+        if (p.bankAmount && parseFloat(p.bankAmount) > 0) {
+          pickupExpenses.push({ id: docSnap.id + '-bank', type: 'Pickup', mode: 'Bank Payment', amount: p.bankAmount, date: p.pickupDate, notes: label })
+        }
+        if (p.cashAmount && parseFloat(p.cashAmount) > 0) {
+          pickupExpenses.push({ id: docSnap.id + '-cash', type: 'Pickup', mode: 'Cash', amount: p.cashAmount, date: p.pickupDate, notes: label })
+        }
+      } else {
+        const mode = pm === 'bank' ? 'Bank Payment' : pm === 'cash' ? 'Cash' : 'Unspecified'
+        pickupExpenses.push({ id: docSnap.id, type: 'Pickup', mode, amount: p.price || '0', date: p.pickupDate, notes: label })
+      }
+    })
+
+    const allMonthExpenses = [...monthExpenses, ...pickupExpenses]
+
     const HEADER_BG = 'FF6A1B9A'
     const HEADER_FG = 'FFFFFFFF'
     const TOTAL_BG = 'FFE8D5F5'
@@ -460,9 +492,9 @@ export default function UsedExpenses() {
       styleTotal(totalRow, 2)
     }
 
-    const cashExpenses = monthExpenses.filter(e => (e.mode || '').toLowerCase() === 'cash')
-    const bankExpenses = monthExpenses.filter(e => (e.mode || '').toLowerCase() === 'bank payment')
-    const otherExpenses = monthExpenses.filter(e => !['cash', 'bank payment'].includes((e.mode || '').toLowerCase()))
+    const cashExpenses = allMonthExpenses.filter(e => (e.mode || '').toLowerCase() === 'cash')
+    const bankExpenses = allMonthExpenses.filter(e => (e.mode || '').toLowerCase() === 'bank payment')
+    const otherExpenses = allMonthExpenses.filter(e => !['cash', 'bank payment'].includes((e.mode || '').toLowerCase()))
 
     const cashTotal = cashExpenses.reduce((s, e) => s + parseFloat(e.amount), 0)
     const bankTotal = bankExpenses.reduce((s, e) => s + parseFloat(e.amount), 0)
@@ -481,7 +513,7 @@ export default function UsedExpenses() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Expenses_${monthNames[month]}_${year}.xlsx`
+    a.download = `UsedGoodExpenses_${monthNames[month]}_${year}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   }

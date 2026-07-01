@@ -17,7 +17,9 @@ interface PickupData {
   pickupEndTime: string
   additionalNotes: string
   status: 'pending' | 'collected' | 'cancelled'
-  paymentMethod: 'card' | 'cash' | 'both'
+  paymentMethod: 'bank' | 'cash' | 'both' | ''
+  bankAmount?: string
+  cashAmount?: string
 }
 
 interface NewPickupModalProps {
@@ -44,7 +46,9 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, editId, on
     pickupEndTime: '',
     additionalNotes: '',
     status: 'pending',
-    paymentMethod: 'card',
+    paymentMethod: '',
+    bankAmount: '',
+    cashAmount: '',
   })
 
   useEffect(() => {
@@ -66,15 +70,18 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, editId, on
         pickupEndTime: '',
         additionalNotes: '',
         status: 'pending',
-        paymentMethod: 'card',
+        paymentMethod: '',
+        bankAmount: '',
+        cashAmount: '',
       })
     }
   }, [editPickup])
 
-function CustomSelect<T extends string>({ value, onChange, options }: {
+function CustomSelect<T extends string>({ value, onChange, options, placeholder }: {
   value: T
   onChange: (v: T) => void
   options: { value: T; label: string }[]
+  placeholder?: string
 }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
@@ -107,7 +114,7 @@ function CustomSelect<T extends string>({ value, onChange, options }: {
         onClick={handleOpen}
         className="w-full flex items-center justify-between px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
       >
-        <span>{selected?.label}</span>
+        <span className={!selected ? 'text-gray-500' : ''}>{selected?.label ?? (placeholder ?? 'Select...')}</span>
         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && rect && createPortal(
@@ -556,13 +563,40 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
               <label className="block text-sm font-medium mb-1">Payment Method</label>
               <CustomSelect
                 value={formData.paymentMethod}
-                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v }))}
+                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v, bankAmount: '', cashAmount: '' }))}
+                placeholder="Select payment method"
                 options={[
-                  { value: 'card', label: 'Card' },
+                  { value: 'bank', label: 'Bank' },
                   { value: 'cash', label: 'Cash' },
                   { value: 'both', label: 'Both' },
                 ]}
               />
+              {formData.paymentMethod === 'both' && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-400">Bank Amount</label>
+                    <input
+                      type="number"
+                      value={formData.bankAmount ?? ''}
+                      onChange={(e) => setFormData(p => ({ ...p, bankAmount: e.target.value }))}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      placeholder="£0.00"
+                      className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-400">Cash Amount</label>
+                    <input
+                      type="number"
+                      value={formData.cashAmount ?? ''}
+                      onChange={(e) => setFormData(p => ({ ...p, cashAmount: e.target.value }))}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      placeholder="£0.00"
+                      className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
