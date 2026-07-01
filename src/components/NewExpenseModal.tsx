@@ -1,12 +1,16 @@
-import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Check } from 'lucide-react'
+import { X, CalendarDays, ChevronLeft, ChevronRight, ChevronDown, Check, Paperclip, FileText } from 'lucide-react'
 import { FormEvent, useEffect, useState, useRef } from 'react'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { storage } from '../lib/firebase'
 
 interface Expense {
   id: string
   type: string
+  mode: string
   amount: string
   date: string
   notes: string
+  billUrl?: string
 }
 
 interface NewExpenseModalProps {
@@ -15,6 +19,8 @@ interface NewExpenseModalProps {
   onSave?: (expense: Omit<Expense, 'id'>) => void
   editExpense?: Expense | null
 }
+
+const EXPENSE_MODES = ['Cash', 'Bank Payment']
 
 const EXPENSE_TYPES = [
   'Diesel',
@@ -26,6 +32,8 @@ const EXPENSE_TYPES = [
   'Vehicle Maintenance',
   'Refund',
   'Advertisement',
+  'VAT',
+  'HMRC Tax',
   'Other',
 ]
 
@@ -33,7 +41,7 @@ function getTodayDate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-function CustomSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+function CustomSelect({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -55,7 +63,7 @@ function CustomSelect({ value, onChange, options }: { value: string; onChange: (
         className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500 flex items-center justify-between"
       >
         <span className={!selectedLabel ? 'text-gray-500' : ''}>
-          {selectedLabel ? selectedLabel.charAt(0).toUpperCase() + selectedLabel.slice(1) : 'Select expense type'}
+          {selectedLabel ? selectedLabel.charAt(0).toUpperCase() + selectedLabel.slice(1) : (placeholder ?? 'Select expense type')}
         </span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -85,40 +93,66 @@ function CustomSelect({ value, onChange, options }: { value: string; onChange: (
 export default function NewExpenseModal({ isOpen, onClose, onSave, editExpense }: NewExpenseModalProps) {
   const [formData, setFormData] = useState<Omit<Expense, 'id'>>({
     type: '',
+    mode: '',
     amount: '',
     date: getTodayDate(),
     notes: '',
+    billUrl: '',
   })
+  const [billFile, setBillFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    setBillFile(null)
     if (editExpense) {
       setFormData({
         type: editExpense.type,
+        mode: editExpense.mode || '',
         amount: editExpense.amount,
         date: editExpense.date,
         notes: editExpense.notes,
+        billUrl: editExpense.billUrl || '',
       })
     } else {
       setFormData({
         type: '',
+        mode: '',
         amount: '',
         date: getTodayDate(),
         notes: '',
+        billUrl: '',
       })
     }
   }, [editExpense])
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    if (!billFile && !formData.billUrl) return
+    let billUrl = formData.billUrl || ''
+    if (billFile) {
+      setUploading(true)
+      try {
+        const ext = billFile.name.split('.').pop()
+        const path = `expense-bills/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+        const snap = await uploadBytes(storageRef(storage, path), billFile)
+        billUrl = await getDownloadURL(snap.ref)
+      } finally {
+        setUploading(false)
+      }
+    }
     if (onSave) {
-      onSave(formData)
+      onSave({ ...formData, billUrl })
     }
     onClose()
+    setBillFile(null)
     setFormData({
       type: '',
+      mode: '',
       amount: '',
       date: getTodayDate(),
       notes: '',
+      billUrl: '',
     })
   }
 
@@ -272,6 +306,16 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
             </div>
 
             <div>
+              <label className="block text-sm font-medium mb-1">Expense Mode</label>
+              <CustomSelect
+                value={formData.mode}
+                onChange={(v) => setFormData(p => ({ ...p, mode: v }))}
+                options={EXPENSE_MODES}
+                placeholder="Select expense mode"
+              />
+            </div>
+
+            <div>
               <label htmlFor="amount" className="block text-sm font-medium mb-1">
                 Amount
               </label>
@@ -311,6 +355,60 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
                 rows={3}
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Document <span className="text-red-400">*</span></label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-3 w-full px-3 py-2 bg-black/40 backdrop-blur-xl border rounded-2xl text-gray-300 cursor-pointer hover:border-purple-500/50 transition-colors ${!billFile && !formData.billUrl ? 'border-red-500/40' : 'border-white/10'}`}
+              >
+                {billFile ? (
+                  <>
+                    <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span className="text-sm truncate flex-1">{billFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setBillFile(null) }}
+                      className="text-gray-500 hover:text-red-400 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : formData.billUrl ? (
+                  <>
+                    <FileText className="w-4 h-4 text-purple-400 shrink-0" />
+                    <a
+                      href={formData.billUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-sm text-purple-400 hover:text-purple-300 truncate flex-1"
+                    >
+                      View existing bill
+                    </a>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setFormData(p => ({ ...p, billUrl: '' })) }}
+                      className="text-gray-500 hover:text-red-400 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Paperclip className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-sm text-gray-500">Upload document</span>
+                  </>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.[0]) setBillFile(e.target.files[0]) }}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
@@ -323,9 +421,10 @@ function DatePicker({ value, onChange, required }: { value: string; onChange: (v
             </button>
             <button
               type="submit"
-              className="px-6 py-2 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+              disabled={uploading}
+              className="px-6 py-2 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {editExpense ? 'Update Expense' : 'Save Expense'}
+              {uploading ? 'Uploading...' : editExpense ? 'Update Expense' : 'Save Expense'}
             </button>
           </div>
         </form>

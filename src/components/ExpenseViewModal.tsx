@@ -1,11 +1,13 @@
-import { X } from 'lucide-react'
+import { X, Paperclip } from 'lucide-react'
 
 interface Expense {
   id: string
   type: string
+  mode: string
   amount: string
   date: string
   notes: string
+  billUrl?: string
 }
 
 interface ExpenseViewModalProps {
@@ -41,6 +43,11 @@ export default function ExpenseViewModal({ isOpen, onClose, expense }: ExpenseVi
             </div>
 
             <div>
+              <p className="text-sm font-medium mb-1">Mode</p>
+              <p className="text-base">{expense.mode || '—'}</p>
+            </div>
+
+            <div>
               <p className="text-sm font-medium mb-1">Amount</p>
               <p className="text-base">${expense.amount}</p>
             </div>
@@ -54,6 +61,21 @@ export default function ExpenseViewModal({ isOpen, onClose, expense }: ExpenseVi
               <div className="md:col-span-2">
                 <p className="text-sm font-medium mb-1">Notes</p>
                 <p className="text-base">{expense.notes}</p>
+              </div>
+            )}
+
+            {expense.billUrl && (
+              <div className="md:col-span-2">
+                <p className="text-sm font-medium mb-1">Bill / Attachment</p>
+                <a
+                  href={expense.billUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  <Paperclip className="w-4 h-4" />
+                  View Bill
+                </a>
               </div>
             )}
           </div>

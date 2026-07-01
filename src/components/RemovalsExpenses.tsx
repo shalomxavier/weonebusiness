@@ -22,9 +22,11 @@ const EXPENSE_TYPES = [
 interface Expense {
   id: string
   type: string
+  mode: string
   amount: string
   date: string
   notes: string
+  billUrl?: string
 }
 
 function TypeDropdown({
@@ -204,9 +206,11 @@ export default function RemovalsExpenses() {
   const handleSaveExpense = async (expense: Omit<Expense, 'id'>) => {
     await addDoc(collection(db, 'removalsExpenses'), {
       type: expense.type,
+      mode: expense.mode,
       amount: expense.amount,
       date: expense.date,
       notes: expense.notes,
+      billUrl: expense.billUrl || '',
     })
   }
 
@@ -214,9 +218,11 @@ export default function RemovalsExpenses() {
     if (selectedExpense) {
       await updateDoc(doc(db, 'removalsExpenses', selectedExpense.id), {
         type: expense.type,
+        mode: expense.mode,
         amount: expense.amount,
         date: expense.date,
         notes: expense.notes,
+        billUrl: expense.billUrl || '',
       })
     }
   }
