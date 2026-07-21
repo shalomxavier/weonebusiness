@@ -286,21 +286,31 @@ export default function Dashboard() {
       const date = new Date(expense.date)
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
     })
+    const isSelectedPeriod = (value?: string) => {
+      if (!value) return false
+      const dateStr = value.split('T')[0]
+      if (useSpecificDate && selectedDate) return dateStr === selectedDate
+      const date = new Date(`${dateStr}T00:00:00`)
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear
+    }
+    const filteredPickupAdvances = pickups.filter(pickup => isSelectedPeriod(pickup.advanceDate))
+    const filteredOrderAdvances = orders.filter(order => isSelectedPeriod(order.advanceDate))
+    const filteredRemovalAdvances = removalOrders.filter(order => isSelectedPeriod(order.advanceDate))
 
     // Used Goods Revenue = price from delivered orders + advance from pending orders
     const deliveredOrdersPrice = filteredOrders
       .filter(o => o.status === 'delivered')
-      .reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
-    const pendingOrdersAdvance = filteredOrders
-      .filter(o => o.status === 'pending')
+      .reduce((sum, order) => sum + Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)), 0)
+    const pendingOrdersAdvance = filteredOrderAdvances
+      .filter(o => o.status !== 'cancelled')
       .reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
     const usedGoodsRevenue = deliveredOrdersPrice + pendingOrdersAdvance
     // All item costs = price from collected pickups + advance from pending pickups
     const collectedPickupsPrice = filteredPickups
       .filter(p => p.status === 'collected')
-      .reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
-    const pendingPickupsAdvance = filteredPickups
-      .filter(p => p.status === 'pending')
+      .reduce((sum, pickup) => sum + Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0)), 0)
+    const pendingPickupsAdvance = filteredPickupAdvances
+      .filter(p => p.status !== 'cancelled')
       .reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
     const allItemCosts = collectedPickupsPrice + pendingPickupsAdvance
     const otherExpenses = filteredExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
@@ -309,9 +319,8 @@ export default function Dashboard() {
 
     const completedRemovalsPrice = filteredRemovals
       .filter(r => r.status === 'completed')
-      .reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
-    const pendingRemovalsAdvance = filteredRemovals
-      .filter(r => r.status === 'pending')
+      .reduce((sum, order) => sum + Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0)), 0)
+    const pendingRemovalsAdvance = filteredRemovalAdvances
       .reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
     const removalsTotalRevenue = completedRemovalsPrice + pendingRemovalsAdvance
     const removalsExpense = filteredRemovalsExpenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
@@ -319,24 +328,24 @@ export default function Dashboard() {
 
     // Build detailed breakdown data with transactions
     const collectedPickupsTx = filteredPickups
-      .filter(p => p.status === 'collected' && parseFloat(p.price) > 0)
+      .filter(p => p.status === 'collected' && (parseFloat(p.price) || 0) - (parseFloat(p.advance) || 0) > 0)
       .map(p => ({
         id: p.id,
         title: p.pickupNumber || p.id.slice(-6),
         subtitle: p.customerName || p.customerPhone || 'Unknown',
-        amount: parseFloat(p.price) || 0,
+        amount: Math.max(0, (parseFloat(p.price) || 0) - (parseFloat(p.advance) || 0)),
         date: p.pickupDate,
         status: p.status
       }))
 
-    const pendingPickupsTx = filteredPickups
-      .filter(p => p.status === 'pending' && parseFloat(p.advance) > 0)
+    const pendingPickupsTx = filteredPickupAdvances
+      .filter(p => p.status !== 'cancelled' && parseFloat(p.advance) > 0)
       .map(p => ({
         id: p.id,
         title: p.pickupNumber || p.id.slice(-6),
         subtitle: p.customerName || p.customerPhone || 'Unknown',
         amount: parseFloat(p.advance) || 0,
-        date: p.pickupDate,
+        date: p.advanceDate,
         status: p.status
       }))
 
@@ -351,46 +360,46 @@ export default function Dashboard() {
       }))
 
     const deliveredOrdersTx = filteredOrders
-      .filter(o => o.status === 'delivered' && parseFloat(o.price) > 0)
+      .filter(o => o.status === 'delivered' && (parseFloat(o.price) || 0) - (parseFloat(o.advance) || 0) > 0)
       .map(o => ({
         id: o.id,
         title: o.orderNumber || o.id.slice(-6),
         subtitle: o.customerName || o.customerPhone || 'Unknown',
-        amount: parseFloat(o.price) || 0,
+        amount: Math.max(0, (parseFloat(o.price) || 0) - (parseFloat(o.advance) || 0)),
         date: o.deliveryDate,
         status: o.status
       }))
 
-    const pendingOrdersTx = filteredOrders
-      .filter(o => o.status === 'pending' && parseFloat(o.advance) > 0)
+    const pendingOrdersTx = filteredOrderAdvances
+      .filter(o => o.status !== 'cancelled' && parseFloat(o.advance) > 0)
       .map(o => ({
         id: o.id,
         title: o.orderNumber || o.id.slice(-6),
         subtitle: o.customerName || o.customerPhone || 'Unknown',
         amount: parseFloat(o.advance) || 0,
-        date: o.deliveryDate,
+        date: o.advanceDate,
         status: o.status
       }))
 
     const completedRemovalsTx = filteredRemovals
-      .filter(r => r.status === 'completed' && parseFloat(r.totalPrice) > 0)
+      .filter(r => r.status === 'completed' && (parseFloat(r.totalPrice) || 0) - (parseFloat(r.advance) || 0) > 0)
       .map(r => ({
         id: r.id,
         title: r.removalNumber || r.id.slice(-6),
         subtitle: r.customerName || r.customerPhone || 'Unknown',
-        amount: parseFloat(r.totalPrice) || 0,
+        amount: Math.max(0, (parseFloat(r.totalPrice) || 0) - (parseFloat(r.advance) || 0)),
         date: r.removalDate,
         status: r.status
       }))
 
-    const pendingRemovalsTx = filteredRemovals
-      .filter(r => r.status === 'pending' && parseFloat(r.advance) > 0)
+    const pendingRemovalsTx = filteredRemovalAdvances
+      .filter(r => parseFloat(r.advance) > 0)
       .map(r => ({
         id: r.id,
         title: r.removalNumber || r.id.slice(-6),
         subtitle: r.customerName || r.customerPhone || 'Unknown',
         amount: parseFloat(r.advance) || 0,
-        date: r.removalDate,
+        date: r.advanceDate,
         status: r.status
       }))
 
@@ -405,19 +414,19 @@ export default function Dashboard() {
       }))
 
     const usedGoodsExpenseCategories = [
-      { label: 'Collected Pickups Price', value: collectedPickupsPrice, count: collectedPickupsTx.length, transactions: collectedPickupsTx },
-      { label: 'Pending Pickups Advance', value: pendingPickupsAdvance, count: pendingPickupsTx.length, transactions: pendingPickupsTx },
+      { label: 'Collected Pickups Balance', value: collectedPickupsPrice, count: collectedPickupsTx.length, transactions: collectedPickupsTx },
+      { label: 'Pickup Advances', value: pendingPickupsAdvance, count: pendingPickupsTx.length, transactions: pendingPickupsTx },
       { label: 'Other Expenses', value: otherExpenses, count: otherExpensesTx.length, transactions: otherExpensesTx },
     ].filter(c => c.value > 0 || c.count > 0)
 
     const usedGoodsRevenueCategories = [
-      { label: 'Delivered Orders Price', value: deliveredOrdersPrice, count: deliveredOrdersTx.length, transactions: deliveredOrdersTx },
-      { label: 'Pending Orders Advance', value: pendingOrdersAdvance, count: pendingOrdersTx.length, transactions: pendingOrdersTx },
+      { label: 'Delivered Orders Balance', value: deliveredOrdersPrice, count: deliveredOrdersTx.length, transactions: deliveredOrdersTx },
+      { label: 'Order Advances', value: pendingOrdersAdvance, count: pendingOrdersTx.length, transactions: pendingOrdersTx },
     ].filter(c => c.value > 0 || c.count > 0)
 
     const removalsRevenueCategories = [
-      { label: 'Completed Removals Price', value: completedRemovalsPrice, count: completedRemovalsTx.length, transactions: completedRemovalsTx },
-      { label: 'Pending Removals Advance', value: pendingRemovalsAdvance, count: pendingRemovalsTx.length, transactions: pendingRemovalsTx },
+      { label: 'Completed Removals Balance', value: completedRemovalsPrice, count: completedRemovalsTx.length, transactions: completedRemovalsTx },
+      { label: 'Removal Advances', value: pendingRemovalsAdvance, count: pendingRemovalsTx.length, transactions: pendingRemovalsTx },
     ].filter(c => c.value > 0 || c.count > 0)
 
     const removalsExpenseCategories = [

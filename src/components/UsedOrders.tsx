@@ -292,14 +292,19 @@ export default function UsedOrders() {
       return orderDate.getMonth() === month && orderDate.getFullYear() === year
     })
 
+    const monthAdvances = orders.filter(order => {
+      if (!order.advanceDate || order.status === 'cancelled') return false
+      const advanceDate = new Date(`${order.advanceDate.split('T')[0]}T00:00:00`)
+      return advanceDate.getMonth() === month && advanceDate.getFullYear() === year && (parseFloat(order.advance) || 0) > 0
+    })
+
     // Prepare order data for export
     const orderData = monthOrders.map((order, index) => ({
       'No.': index + 1,
       'Item Number': order.itemNumber,
       'Item Name': order.itemName,
-      'Price': parseFloat(order.price),
-      'Advance': parseFloat(order.advance),
-      'Balance': parseFloat(order.price) - parseFloat(order.advance),
+      'Price': parseFloat(order.price) || 0,
+      'Balance': Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)),
       'Customer Name': order.customerName,
       'Phone': order.phone,
       'Address': order.address,
@@ -309,11 +314,21 @@ export default function UsedOrders() {
       'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
       'Notes': order.additionalNotes || '-',
     }))
+    const advanceData = monthAdvances.map((order, index) => ({
+      'No.': index + 1,
+      'Advance Date': order.advanceDate,
+      'Item Number': order.itemNumber,
+      'Item Name': order.itemName,
+      'Customer Name': order.customerName,
+      'Advance': parseFloat(order.advance) || 0,
+      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
+      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
+    }))
 
     // Calculate totals for the selected month
-    const monthlyTotal = monthOrders.reduce((sum, order) => sum + parseFloat(order.price), 0)
-    const monthlyAdvance = monthOrders.reduce((sum, order) => sum + parseFloat(order.advance), 0)
-    const monthlyBalance = monthlyTotal - monthlyAdvance
+    const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
+    const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+    const monthlyBalance = monthOrders.reduce((sum, order) => sum + Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)), 0)
     const pendingCount = monthOrders.filter(o => o.status === 'pending').length
     const deliveredCount = monthOrders.filter(o => o.status === 'delivered').length
     const cancelledCount = monthOrders.filter(o => o.status === 'cancelled').length
@@ -338,6 +353,9 @@ export default function UsedOrders() {
     // Create orders sheet
     const wsOrders = XLSX.utils.json_to_sheet(orderData)
     XLSX.utils.book_append_sheet(wb, wsOrders, 'Orders')
+
+    const wsAdvances = XLSX.utils.json_to_sheet(advanceData)
+    XLSX.utils.book_append_sheet(wb, wsAdvances, 'Advances')
 
     // Create summary sheet
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)

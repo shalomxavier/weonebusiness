@@ -329,6 +329,12 @@ export default function RemovalsOrders() {
       return orderDate.getMonth() === month && orderDate.getFullYear() === year
     })
 
+    const monthAdvances = orders.filter(order => {
+      if (!order.advanceDate) return false
+      const advanceDate = new Date(`${order.advanceDate.split('T')[0]}T00:00:00`)
+      return advanceDate.getMonth() === month && advanceDate.getFullYear() === year && (parseFloat(order.advance) || 0) > 0
+    })
+
     // Prepare order data for export
     const orderData = monthOrders.map((order, index) => ({
       'No.': index + 1,
@@ -339,18 +345,26 @@ export default function RemovalsOrders() {
       'Postcode': order.postcode,
       'Removal Date': order.removalDate,
       'Time': `${order.startTime} - ${order.endTime}`,
-      'Total Price': parseFloat(order.totalPrice),
-      'Advance': parseFloat(order.advance),
-      'Balance': parseFloat(order.totalPrice) - parseFloat(order.advance),
+      'Total Price': parseFloat(order.totalPrice) || 0,
+      'Balance': Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0)),
       'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
       'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
       'Notes': order.notes || '-',
     }))
+    const advanceData = monthAdvances.map((order, index) => ({
+      'No.': index + 1,
+      'Advance Date': order.advanceDate,
+      'Customer Name': order.customerName,
+      'Phone': order.phone,
+      'Advance': parseFloat(order.advance) || 0,
+      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
+      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
+    }))
 
     // Calculate totals for the selected month
-    const monthlyTotal = monthOrders.reduce((sum, order) => sum + parseFloat(order.totalPrice), 0)
-    const monthlyAdvance = monthOrders.reduce((sum, order) => sum + parseFloat(order.advance), 0)
-    const monthlyBalance = monthlyTotal - monthlyAdvance
+    const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
+    const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
+    const monthlyBalance = monthOrders.reduce((sum, order) => sum + Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0)), 0)
     const pendingCount = monthOrders.filter(o => o.status === 'pending').length
     const completedCount = monthOrders.filter(o => o.status === 'completed').length
 
@@ -373,6 +387,9 @@ export default function RemovalsOrders() {
     // Create orders sheet
     const wsOrders = XLSX.utils.json_to_sheet(orderData)
     XLSX.utils.book_append_sheet(wb, wsOrders, 'Removal Orders')
+
+    const wsAdvances = XLSX.utils.json_to_sheet(advanceData)
+    XLSX.utils.book_append_sheet(wb, wsAdvances, 'Advances')
 
     // Create summary sheet
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
