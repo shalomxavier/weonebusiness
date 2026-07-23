@@ -13,5 +13,9 @@ service firebase.storage {
     match /removalOrders/{fileName} {
       allow read, write: if request.auth != null;
     }
+    // Expense bill attachments
+    match /expense-bills/{fileName} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
