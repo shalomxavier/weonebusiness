@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext.tsx'
 import SplitText from './SplitText.tsx'
 import MetricCard from './MetricCard.tsx'
-import { Wallet, Coins, CreditCard, PoundSterling, TrendingUp, ArrowDownCircle, Phone, Eye, Pencil, CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Wallet, Coins, CreditCard, PoundSterling, TrendingUp, ArrowDownCircle, Phone, Eye, Pencil, CalendarDays, ChevronLeft, ChevronRight, X, Bell, Clock, Check } from 'lucide-react'
 import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import EnquiryViewModal from './EnquiryViewModal'
@@ -144,6 +144,8 @@ export default function Dashboard() {
   const [removalOrders, setRemovalOrders] = useState<any[]>([])
   const [removalsExpenses, setRemovalsExpenses] = useState<any[]>([])
   const [leads, setLeads] = useState<any[]>([])
+  const [dashboardReminders, setDashboardReminders] = useState<any[]>([])
+  const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [viewLead, setViewLead] = useState<Enquiry | null>(null)
   const [editLead, setEditLead] = useState<Enquiry | null>(null)
@@ -225,8 +227,14 @@ export default function Dashboard() {
       (snapshot) => setLeads(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
     )
 
+    const remindersUnsubscribe = onSnapshot(
+      query(collection(db, 'reminders'), orderBy('createdAt', 'desc')),
+      (snapshot) => setDashboardReminders(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })))
+    )
+
     return () => {
       leadsUnsubscribe()
+      remindersUnsubscribe()
     }
   }, [])
 
@@ -583,6 +591,71 @@ export default function Dashboard() {
                   </div>
                 </div>
               )}
+
+              {(() => {
+                const now = new Date()
+                const todayDate = now.getDate()
+                const WEEKDAY_MAP = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                const todayWeekday = WEEKDAY_MAP[now.getDay()]
+                const todayMonthName = now.toLocaleString('en-US', { month: 'long' })
+                const todayYearlyStr = `${todayDate} ${todayMonthName}`
+
+                const todayReminders = dashboardReminders.filter((r: any) => {
+                  if (dismissedReminders.has(r.id)) return false
+                  if (r.frequency === 'daily') return true
+                  if (r.frequency === 'weekly' && r.weekdays?.includes(todayWeekday)) return true
+                  if (r.frequency === 'monthly' && r.dates?.includes(todayDate)) return true
+                  if (r.frequency === 'yearly' && r.yearlyDate === todayYearlyStr) return true
+                  if (r.frequency === 'once' && r.onceDate === todayIso) return true
+                  return false
+                })
+
+                if (todayReminders.length === 0) return null
+                return (
+                  <div className="mt-6 space-y-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Bell className="w-4 h-4 text-purple-400" />
+                      <span className="text-sm font-semibold tracking-widest text-purple-400 uppercase">Reminders</span>
+                      <span className="text-xs bg-purple-400/10 text-purple-400 px-2 py-0.5 rounded-full">{todayReminders.length}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {todayReminders.map((r: any) => (
+                        <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-black/30 border border-purple-500/20">
+                          <div className="min-w-0">
+                            <p className="text-base font-medium text-white truncate">{r.name}</p>
+                            {r.notes && <p className="text-sm text-gray-400 truncate">{r.notes}</p>}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className={`flex items-center gap-1 text-sm ${
+                              r.frequency === 'daily' ? 'text-blue-400' :
+                              r.frequency === 'weekly' ? 'text-green-400' :
+                              r.frequency === 'monthly' ? 'text-yellow-400' :
+                              r.frequency === 'yearly' ? 'text-orange-400' :
+                              'text-pink-400'
+                            }`}>
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>{r.time}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-lg text-xs font-medium capitalize ${
+                              r.frequency === 'daily' ? 'bg-blue-400/10 text-blue-400' :
+                              r.frequency === 'weekly' ? 'bg-green-400/10 text-green-400' :
+                              r.frequency === 'monthly' ? 'bg-yellow-400/10 text-yellow-400' :
+                              r.frequency === 'yearly' ? 'bg-orange-400/10 text-orange-400' :
+                              'bg-pink-400/10 text-pink-400'
+                            }`}>{r.frequency === 'once' ? 'Just once' : r.frequency}</span>
+                            <button type="button" onClick={() => setDismissedReminders(prev => new Set(prev).add(r.id))} className="p-1.5 rounded-xl hover:bg-green-500/20 transition-colors text-gray-400 hover:text-green-400" title="Done">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => setDismissedReminders(prev => new Set(prev).add(r.id))} className="p-1.5 rounded-xl hover:bg-red-500/20 transition-colors text-gray-400 hover:text-red-400" title="Skip">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )
         })()}

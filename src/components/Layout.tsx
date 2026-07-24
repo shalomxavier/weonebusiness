@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
-import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown } from 'lucide-react'
+import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Bell, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown } from 'lucide-react'
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
@@ -387,7 +387,10 @@ export default function Layout() {
         title: 'Productivity',
         icon: Target,
         defaultOpen: false,
-        items: [{ id: 'productivity-leads', label: 'Leads', to: '/productivity/leads', icon: UserPlus }],
+        items: [
+          { id: 'productivity-leads', label: 'Leads', to: '/productivity/leads', icon: UserPlus },
+          { id: 'productivity-reminders', label: 'Reminders', to: '/productivity/reminders', icon: Bell },
+        ],
       },
     ],
     []
