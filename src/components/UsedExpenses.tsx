@@ -330,13 +330,12 @@ export default function UsedExpenses() {
   }, [filteredExpenses.length])
 
   // Export to Excel
-  const handleExport = async (month: number, year: number) => {
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const handleExport = async (fromDate: string, toDate: string) => {
     const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
     const monthExpenses = expenses.filter(expense => {
-      const d = new Date(expense.date)
-      return d.getMonth() === month && d.getFullYear() === year
+      const d = expense.date?.split('T')[0] || expense.date
+      return d >= fromDate && d <= toDate
     })
 
     // Fetch pickups and normalise into expense rows
@@ -352,8 +351,8 @@ export default function UsedExpenses() {
         additionalNotes?: string
       }
       if (!p.pickupDate) return
-      const d = new Date(p.pickupDate)
-      if (d.getMonth() !== month || d.getFullYear() !== year) return
+      const pickupDate = p.pickupDate.split('T')[0] || p.pickupDate
+      if (pickupDate < fromDate || pickupDate > toDate) return
       const label = p.additionalNotes || ''
       const pm = (p.paymentMethod || '').toLowerCase()
       if (pm === 'both') {
@@ -492,6 +491,88 @@ export default function UsedExpenses() {
       styleTotal(totalRow, 2)
     }
 
+    const buildCategorySheet = (ws: ExcelJS.Worksheet, allExpenses: Expense[]) => {
+      const hasOther = allExpenses.some(e =>
+        !['cash', 'bank payment'].includes((e.mode || '').toLowerCase()) &&
+        Math.abs(parseFloat(e.amount) || 0) > 0
+      )
+
+      ws.columns = hasOther
+        ? [
+            { key: 'category', width: 26 },
+            { key: 'cash', width: 16 },
+            { key: 'bank', width: 16 },
+            { key: 'other', width: 16 },
+            { key: 'count', width: 10 },
+            { key: 'total', width: 16 },
+          ]
+        : [
+            { key: 'category', width: 26 },
+            { key: 'cash', width: 16 },
+            { key: 'bank', width: 16 },
+            { key: 'count', width: 10 },
+            { key: 'total', width: 16 },
+          ]
+
+      const header = hasOther
+        ? ['Category', 'Cash', 'Bank Payment', 'Unspecified', 'Count', 'Total']
+        : ['Category', 'Cash', 'Bank Payment', 'Count', 'Total']
+      const headerRow = ws.addRow(header)
+      styleHeader(headerRow)
+
+      const byCategory: Record<string, { cash: number; bank: number; other: number; count: number; total: number }> = {}
+
+      allExpenses.forEach(e => {
+        const cat = cap(e.type)
+        const mode = (e.mode || '').toLowerCase()
+        const amt = parseFloat(e.amount) || 0
+        if (!byCategory[cat]) byCategory[cat] = { cash: 0, bank: 0, other: 0, count: 0, total: 0 }
+        if (mode === 'cash') byCategory[cat].cash += amt
+        else if (mode === 'bank payment') byCategory[cat].bank += amt
+        else byCategory[cat].other += amt
+        byCategory[cat].count += 1
+        byCategory[cat].total += amt
+      })
+
+      const sorted = Object.entries(byCategory).sort((a, b) => b[1].total - a[1].total)
+
+      sorted.forEach(([cat, t], i) => {
+        const rowValues = hasOther
+          ? [cat, `£${t.cash.toFixed(2)}`, `£${t.bank.toFixed(2)}`, `£${t.other.toFixed(2)}`, t.count, `£${t.total.toFixed(2)}`]
+          : [cat, `£${t.cash.toFixed(2)}`, `£${t.bank.toFixed(2)}`, t.count, `£${t.total.toFixed(2)}`]
+        const row = ws.addRow(rowValues)
+        row.eachCell({ includeEmpty: true }, (cell, col) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: i % 2 === 1 ? ALT_BG : DEF_BG } }
+          cell.font = { color: { argb: DEF_FG }, size: 12 }
+          cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'left' : 'right' }
+          cell.border = thinBorder()
+        })
+        row.height = 18
+      })
+
+      const totals = sorted.reduce((acc, [, t]) => ({
+        cash: acc.cash + t.cash,
+        bank: acc.bank + t.bank,
+        other: acc.other + t.other,
+        count: acc.count + t.count,
+        total: acc.total + t.total,
+      }), { cash: 0, bank: 0, other: 0, count: 0, total: 0 })
+
+      const totalValues = hasOther
+        ? ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, `£${totals.other.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
+        : ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
+
+      ws.addRow([])
+      const totalRow = ws.addRow(totalValues)
+      totalRow.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
+        cell.font = { bold: true, color: { argb: TOTAL_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'left' : 'right' }
+        cell.border = thinBorder()
+      })
+      totalRow.height = 20
+    }
+
     const cashExpenses = allMonthExpenses.filter(e => (e.mode || '').toLowerCase() === 'cash')
     const bankExpenses = allMonthExpenses.filter(e => (e.mode || '').toLowerCase() === 'bank payment')
     const otherExpenses = allMonthExpenses.filter(e => !['cash', 'bank payment'].includes((e.mode || '').toLowerCase()))
@@ -507,13 +588,14 @@ export default function UsedExpenses() {
     buildModeSheet(wb.addWorksheet('Bank Payment'), bankExpenses, 'Bank Payment')
     if (otherExpenses.length > 0) buildModeSheet(wb.addWorksheet('Unspecified'), otherExpenses, 'Unspecified')
     buildSummarySheet(wb.addWorksheet('Summary'), cashTotal, bankTotal, otherTotal, grandTotal)
+    buildCategorySheet(wb.addWorksheet('Category Wise'), allMonthExpenses)
 
     const buffer = await wb.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `UsedGoodExpenses_${monthNames[month]}_${year}.xlsx`
+    a.download = `UsedGoodExpenses_${fromDate}_to_${toDate}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -780,6 +862,7 @@ export default function UsedExpenses() {
         onClose={() => setIsExportModalOpen(false)}
         onExport={handleExport}
         title="Export Expenses"
+        mode="range"
       />
     </section>
   )
