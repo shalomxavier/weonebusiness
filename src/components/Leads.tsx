@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Eye, Pencil, Trash2, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, LayoutList, PhoneMissed, PhoneCall, Flame, FileSearch, CheckCircle2, Phone, AlertCircle } from 'lucide-react'
+import { Eye, Pencil, Trash2, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, LayoutList, PhoneMissed, PhoneCall, Flame, FileSearch, CheckCircle2, Phone, AlertCircle, Loader2 } from 'lucide-react'
 import NewEnquiryModal, { Enquiry } from './NewEnquiryModal'
 import EnquiryViewModal from './EnquiryViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
@@ -251,6 +251,7 @@ export default function Leads() {
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [enquiries, setEnquiries] = useState<Enquiry[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [fromDate, setFromDate] = useState(defaultFromDate)
@@ -261,7 +262,8 @@ export default function Leads() {
     const q = query(collection(db, 'leads'), orderBy('createdAt', 'desc'))
     const unsub = onSnapshot(q, (snap) => {
       setEnquiries(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enquiry)))
-    })
+      setLoading(false)
+    }, () => setLoading(false))
     return () => unsub()
   }, [])
 
@@ -487,7 +489,11 @@ export default function Leads() {
         )}
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-200">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-200">
           <p className="text-sm">{enquiries.length === 0 ? 'No enquiries yet. Click “New Enquiry” to get started.' : 'No enquiries match your filters.'}</p>
         </div>

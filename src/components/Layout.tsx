@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
-import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Bell, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown } from 'lucide-react'
+import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Bell, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown, Loader2 } from 'lucide-react'
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
@@ -110,7 +110,7 @@ function UserAttendanceModal({ onClose }: { onClose: () => void }) {
         {/* Records */}
         <div className="overflow-y-auto flex-1">
           {loading ? (
-            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Loading…</div>
+            <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-purple-400" /></div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 gap-2 text-gray-500">
               <Clock className="w-7 h-7 opacity-30" />

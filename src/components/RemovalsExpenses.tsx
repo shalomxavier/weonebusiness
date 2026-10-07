@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { Search, X, Download, Eye, Pencil, Trash2, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Loader2 } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import ExcelJS from 'exceljs'
@@ -193,6 +193,8 @@ export default function RemovalsExpenses() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dataReady, setDataReady] = useState(false)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
 
   // Real-time Firestore listener for removals expenses
@@ -204,7 +206,8 @@ export default function RemovalsExpenses() {
         ...doc.data(),
       })) as Expense[]
       setExpenses(expensesData)
-    })
+      setDataReady(true)
+    }, () => setLoading(false))
     return () => unsubscribe()
   }, [])
 
@@ -330,6 +333,11 @@ export default function RemovalsExpenses() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     return filteredExpenses.slice(startIndex, startIndex + ITEMS_PER_PAGE)
   }, [filteredExpenses, showAll, currentPage])
+
+  // Keep the spinner until the first filtered/sliced render is computed
+  useEffect(() => {
+    if (dataReady && loading) setLoading(false)
+  }, [dataReady, loading, displayedExpenses])
 
   // Calculate total pages
   const totalPages = useMemo(() => {
@@ -671,7 +679,11 @@ export default function RemovalsExpenses() {
           : `Showing ${filteredExpenses.length} of ${expenses.length} expenses`}
       </div>
 
-      {filteredExpenses.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-300">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : filteredExpenses.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {expenses.length === 0

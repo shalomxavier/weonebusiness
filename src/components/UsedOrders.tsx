@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download } from 'lucide-react'
+import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Download, Loader2 } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { db, storage } from '../lib/firebase'
@@ -195,6 +195,8 @@ function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: s
 
 export default function UsedOrders() {
   const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dataReady, setDataReady] = useState(false)
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -206,7 +208,8 @@ export default function UsedOrders() {
         ...doc.data(),
       })) as Order[]
       setOrders(ordersData)
-    })
+      setDataReady(true)
+    }, () => setLoading(false))
     return () => unsubscribe()
   }, [])
 
@@ -393,6 +396,11 @@ export default function UsedOrders() {
     return filteredOrders.slice(startIndex, startIndex + ITEMS_PER_PAGE)
   }, [filteredOrders, showAll, currentPage])
 
+  // Keep the spinner until the first filtered/sliced render is computed
+  useEffect(() => {
+    if (dataReady && loading) setLoading(false)
+  }, [dataReady, loading, displayedOrders])
+
   // Calculate total pages
   const totalPages = useMemo(() => {
     return Math.ceil(filteredOrders.length / ITEMS_PER_PAGE)
@@ -561,7 +569,11 @@ export default function UsedOrders() {
           : `Showing ${filteredOrders.length} of ${orders.length} orders`}
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-300">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : filteredOrders.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {orders.length === 0

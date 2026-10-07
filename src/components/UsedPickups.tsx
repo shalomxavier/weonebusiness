@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
+import { Eye, Pencil, Trash2, Clock, CheckCircle2, XCircle, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, Loader2 } from 'lucide-react'
 import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import NewPickupModal from './NewPickupModal'
@@ -191,6 +191,8 @@ function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: s
 
 export default function UsedPickups() {
   const [pickups, setPickups] = useState<Pickup[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dataReady, setDataReady] = useState(false)
 
   // Real-time Firestore listener
   useEffect(() => {
@@ -202,7 +204,8 @@ export default function UsedPickups() {
         ...doc.data(),
       })) as Pickup[]
       setPickups(pickupsData)
-    })
+      setDataReady(true)
+    }, () => setLoading(false))
     return () => unsubscribe()
   }, [])
 
@@ -290,6 +293,11 @@ export default function UsedPickups() {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     return filteredPickups.slice(startIndex, startIndex + ITEMS_PER_PAGE)
   }, [filteredPickups, showAll, currentPage])
+
+  // Keep the spinner until the first filtered/sliced render is computed
+  useEffect(() => {
+    if (dataReady && loading) setLoading(false)
+  }, [dataReady, loading, displayedPickups])
 
   // Calculate total pages
   const totalPages = useMemo(() => {
@@ -424,7 +432,11 @@ export default function UsedPickups() {
           : `Showing ${filteredPickups.length} of ${pickups.length} pickups`}
       </div>
 
-      {filteredPickups.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-300">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : filteredPickups.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {pickups.length === 0

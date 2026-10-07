@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { collection, onSnapshot, query, orderBy, Timestamp, updateDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X, ChevronDown, User, Pencil } from 'lucide-react'
+import { Clock, LogIn, LogOut, CalendarDays, ChevronLeft, ChevronRight, X, ChevronDown, User, Pencil, Loader2 } from 'lucide-react'
 import ApprovalTable from './ApprovalTable'
 
 interface AttendanceRecord {
@@ -377,7 +377,7 @@ export default function AttendanceTable() {
       {/* Table */}
       <div className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-48 text-gray-500 text-sm">Loading…</div>
+          <div className="flex items-center justify-center h-48"><Loader2 className="w-6 h-6 animate-spin text-purple-400" /></div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 gap-2 text-gray-500">
             <Clock className="w-8 h-8 opacity-40" />

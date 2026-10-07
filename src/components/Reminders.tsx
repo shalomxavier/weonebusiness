@@ -44,6 +44,7 @@ export default function Reminders() {
   const [notes, setNotes] = useState('')
   const [time, setTime] = useState('')
   const [reminders, setReminders] = useState<Reminder[]>([])
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null)
   const [editName, setEditName] = useState('')
@@ -61,7 +62,8 @@ export default function Reminders() {
         ...doc.data(),
       })) as Reminder[]
       setReminders(remindersData)
-    })
+      setLoading(false)
+    }, () => setLoading(false))
     return () => unsubscribe()
   }, [])
 
@@ -209,7 +211,11 @@ export default function Reminders() {
         </div>
       </div>
 
-      {reminders.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-100">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : reminders.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-100">
           <p className="text-sm">No reminders yet. Start by creating a new reminder.</p>
         </div>

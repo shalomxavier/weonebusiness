@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { Search, X, Users, Crown, Shield, Trash2, ChevronDown, Eye, Pencil } from 'lucide-react'
+import { Search, X, Users, Crown, Shield, Trash2, ChevronDown, Eye, Pencil, Loader2 } from 'lucide-react'
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase.ts'
 import { useAuth } from '../context/AuthContext.tsx'
@@ -78,6 +78,7 @@ export default function UserManage() {
   const [userToEdit, setUserToEdit] = useState<User | null>(null)
   const [userToView, setUserToView] = useState<User | null>(null)
   const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -117,9 +118,11 @@ export default function UserManage() {
           usersData.push({ id: doc.id, ...doc.data() } as User)
         })
         setUsers(usersData)
+        setLoading(false)
       },
       (error) => {
         console.error('Error fetching users:', error)
+        setLoading(false)
       }
     )
 
@@ -255,7 +258,11 @@ export default function UserManage() {
         Showing {filteredUsers.length} of {users.length} users
       </div>
 
-      {filteredUsers.length === 0 ? (
+      {loading ? (
+        <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-10 flex items-center justify-center animate-stack-up delay-300">
+          <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+        </div>
+      ) : filteredUsers.length === 0 ? (
         <div className="bg-black/40 backdrop-blur-xl rounded-3xl p-6 animate-stack-up delay-300">
           <p className="text-sm">
             {users.length === 0
