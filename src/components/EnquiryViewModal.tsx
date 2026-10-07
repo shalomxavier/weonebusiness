@@ -12,8 +12,8 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
-  'removal': 'Removal',
-  'clearance': 'Clearance',
+  'removal': 'House Move',
+  'clearance': 'House Clearance',
 }
 
 const STATUS_COLORS: Record<string, string> = {

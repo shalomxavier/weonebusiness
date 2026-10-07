@@ -19,6 +19,7 @@ interface RemovalOrder {
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'completed'
   type: 'removal' | 'clearance' | 'man_with_van'
+  typeNote?: string
   attachments?: string[]
 }
 
@@ -42,8 +43,8 @@ const STATUS_OPTIONS = [
 ]
 
 const TYPE_OPTIONS = [
-  { value: 'removal', label: 'Removal' },
-  { value: 'clearance', label: 'Clearance' },
+  { value: 'removal', label: 'House Move' },
+  { value: 'clearance', label: 'House Clearance' },
   { value: 'man_with_van', label: 'Man with Van' },
 ]
 
@@ -134,6 +135,7 @@ const emptyRemoval: Omit<RemovalOrder, 'id'> = {
   paymentMethod: 'card',
   status: 'pending',
   type: 'removal',
+  typeNote: '',
   attachments: [],
 }
 
@@ -477,6 +479,20 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
                 value={formData.type}
                 onChange={(v) => setFormData(p => ({ ...p, type: v }))}
                 options={TYPE_OPTIONS as { value: 'removal' | 'clearance' | 'man_with_van'; label: string }[]}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="typeNote" className="block text-sm font-medium mb-1">
+                Type Note
+              </label>
+              <input
+                type="text"
+                id="typeNote"
+                name="typeNote"
+                value={formData.typeNote || ''}
+                onChange={handleChange}
+                className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 

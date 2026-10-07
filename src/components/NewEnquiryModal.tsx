@@ -224,8 +224,8 @@ const today = () => {
 }
 
 const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
-  { value: 'removal', label: 'Removal' },
-  { value: 'clearance', label: 'Clearance' },
+  { value: 'removal', label: 'House Move' },
+  { value: 'clearance', label: 'House Clearance' },
 ]
 
 const EMPTY_FORM = {

@@ -17,6 +17,7 @@ interface RemovalOrder {
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'completed'
   type: 'removal' | 'clearance' | 'man_with_van'
+  typeNote?: string
   attachments?: string[]
 }
 
@@ -65,8 +66,15 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
 
             <div>
               <p className="text-sm font-medium mb-1">Type</p>
-              <p className="text-base">{order.type === 'removal' ? 'Removal' : order.type === 'clearance' ? 'Clearance' : 'Man with Van'}</p>
+              <p className="text-base">{order.type === 'removal' ? 'House Move' : order.type === 'clearance' ? 'House Clearance' : 'Man with Van'}</p>
             </div>
+
+            {order.typeNote && (
+              <div>
+                <p className="text-sm font-medium mb-1">Type Note</p>
+                <p className="text-base">{order.typeNote}</p>
+              </div>
+            )}
 
             <div className="md:col-span-2">
               <p className="text-sm font-medium mb-1">Removal Address</p>
