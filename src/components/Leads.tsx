@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Eye, Pencil, Trash2, Search, X, ChevronDown, LayoutList, PhoneMissed, PhoneCall, Flame, FileSearch, CheckCircle2, Phone, AlertCircle } from 'lucide-react'
+import { Eye, Pencil, Trash2, Search, X, ChevronDown, ChevronLeft, ChevronRight, CalendarDays, LayoutList, PhoneMissed, PhoneCall, Flame, FileSearch, CheckCircle2, Phone, AlertCircle } from 'lucide-react'
 import NewEnquiryModal, { Enquiry } from './NewEnquiryModal'
 import EnquiryViewModal from './EnquiryViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 
 type EnquiryStatus = 'no-answer' | 'answered' | 'very-interested' | 'looking-for-quotes' | 'got-booked' | 'completed-without-booking'
 type FilterStatus = 'all' | EnquiryStatus
+
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+const todayISO = () => toISODate(new Date())
+const defaultFromDate = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 90)
+  return toISODate(d)
+}
 
 const FILTER_OPTIONS: { value: FilterStatus; label: string }[] = [
   { value: 'all', label: 'All Status' },
@@ -111,6 +121,100 @@ function StatusDropdown({ value, onChange }: { value: FilterStatus; onChange: (v
   )
 }
 
+function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+  const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+
+  const select = (day: number) => {
+    const s = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    onChange(s)
+    setOpen(false)
+  }
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y-1) } else setViewMonth(m => m-1) }
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y+1) } else setViewMonth(m => m+1) }
+
+  const display = value ? new Date(value + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : placeholder
+
+  return (
+    <div ref={ref} className="relative w-48">
+      <button
+        type="button"
+        onClick={() => setOpen(p => !p)}
+        className="w-full flex items-center justify-between px-3 py-3 bg-black/40 backdrop-blur-xl rounded-2xl text-base text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        <span className={value ? 'text-gray-300' : 'text-gray-500'}>{display}</span>
+        <div className="flex items-center gap-1">
+          <CalendarDays className="w-4 h-4" />
+        </div>
+      </button>
+      {open && (
+        <div className="absolute z-[200] mt-1 left-0 w-full bg-black rounded-3xl shadow-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button type="button" onClick={prevMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-gray-200">{MONTHS[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded-lg hover:bg-white/10 text-gray-300">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map(d => <div key={d} className="text-center text-xs text-gray-500 font-medium py-1">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-y-1">
+            {cells.map((day, i) => {
+              if (!day) return <div key={i} />
+              const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+              const isSelected = dateStr === value
+              const isToday = dateStr === todayStr
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => select(day)}
+                  className={`w-8 h-8 mx-auto rounded-xl text-xs font-medium transition-colors ${
+                    isSelected ? 'bg-purple-600 text-white' :
+                    isToday ? 'ring-1 ring-white/20 text-white' :
+                    'text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {day}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex justify-between mt-3 pt-3">
+            <button type="button" onClick={() => { onChange(''); setOpen(false) }} className="text-xs text-gray-400 hover:text-white">Clear</button>
+            <button type="button" onClick={() => { onChange(todayStr); setOpen(false) }} className="text-xs text-purple-400 hover:text-purple-300">Today</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const STATUS_CARD_CONFIGS: { status: FilterStatus; label: string; color: string; icon: React.ElementType }[] = [
   { status: 'all',                       label: 'Total',                     color: 'text-white',        icon: LayoutList    },
   { status: 'no-answer',                label: 'No Answer',                color: 'text-gray-400',     icon: PhoneMissed   },
@@ -149,6 +253,8 @@ export default function Leads() {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
+  const [fromDate, setFromDate] = useState(defaultFromDate)
+  const [toDate, setToDate] = useState(todayISO)
   const [overdueModalOpen, setOverdueModalOpen] = useState(false)
 
   useEffect(() => {
@@ -190,8 +296,19 @@ export default function Leads() {
     return days
   }, [enquiries])
 
-  const filtered = useMemo(() => {
+  const dateFilteredEnquiries = useMemo(() => {
     let result = [...enquiries]
+    if (fromDate) {
+      result = result.filter(e => e.enquiryDate && e.enquiryDate >= fromDate)
+    }
+    if (toDate) {
+      result = result.filter(e => e.enquiryDate && e.enquiryDate <= toDate)
+    }
+    return result
+  }, [enquiries, fromDate, toDate])
+
+  const filtered = useMemo(() => {
+    let result = [...dateFilteredEnquiries]
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(e =>
@@ -216,7 +333,16 @@ export default function Leads() {
       return a.callBackDate.localeCompare(b.callBackDate)
     })
     return result
-  }, [enquiries, searchQuery, statusFilter])
+  }, [dateFilteredEnquiries, searchQuery, statusFilter])
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setStatusFilter('all')
+    setFromDate(defaultFromDate())
+    setToDate(todayISO())
+  }
+
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
 
   const handleView = (e: Enquiry) => { setSelectedEnquiry(e); setViewModalOpen(true) }
   const handleEdit = (e: Enquiry) => { setSelectedEnquiry(e); setEditModalOpen(true) }
@@ -233,18 +359,22 @@ export default function Leads() {
 
   return (
     <section className="flex-1 p-8 pt-20 space-y-6 text-gray-300">
-      <div className="flex flex-wrap items-center justify-between gap-4 animate-stack-up">
+      <div className="relative z-20 flex flex-wrap items-center justify-between gap-4 animate-stack-up">
         <header className="space-y-1">
           <p className="text-sm font-semibold tracking-widest">Productivity</p>
           <h1 className="text-4xl font-semibold leading-tight">Leads</h1>
         </header>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
-        >
-          New Enquiry
-        </button>
+        <div className="flex items-center gap-3">
+          <DatePicker value={fromDate} onChange={setFromDate} placeholder="From date" />
+          <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="px-6 py-3 rounded-2xl bg-black/40 backdrop-blur-xl text-gray-300 text-base font-medium hover:bg-white/10 transition-colors border border-white/10"
+          >
+            New Enquiry
+          </button>
+        </div>
       </div>
 
       {overdueEntries.length > 0 && (
@@ -263,7 +393,7 @@ export default function Leads() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 animate-stack-up delay-100">
         {STATUS_CARD_CONFIGS.map(({ status, label, color, icon: Icon }) => {
-          const count = status === 'all' ? enquiries.length : enquiries.filter(e => e.status === status).length
+          const count = status === 'all' ? dateFilteredEnquiries.length : dateFilteredEnquiries.filter(e => e.status === status).length
           return (
             <div
               key={status}
@@ -350,8 +480,8 @@ export default function Leads() {
         <div className="w-full sm:flex-1 sm:min-w-[160px]">
           <StatusDropdown value={statusFilter} onChange={setStatusFilter} />
         </div>
-        {(searchQuery || statusFilter !== 'all') && (
-          <button onClick={() => { setSearchQuery(''); setStatusFilter('all') }} className="text-sm text-gray-500 hover:text-gray-300 underline">
+        {(searchQuery || statusFilter !== 'all' || !isDefaultDateRange) && (
+          <button onClick={clearFilters} className="text-sm text-gray-500 hover:text-gray-300 underline">
             Clear filters
           </button>
         )}

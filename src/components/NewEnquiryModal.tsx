@@ -22,6 +22,7 @@ export interface Enquiry {
   status: EnquiryStatus
   notes: string
   statusStages: StatusStage[]
+  enquiryDate?: string
   callBackDate: string
   fileUrls: string[]
   createdAt: { toDate: () => Date } | null

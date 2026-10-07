@@ -8,6 +8,16 @@ import ExpenseViewModal from './ExpenseViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import ExportModal from './ExportModal'
 
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+const todayISO = () => toISODate(new Date())
+const defaultFromDate = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 30)
+  return toISODate(d)
+}
+
 const EXPENSE_TYPES = [
   { value: 'all', label: 'All Types' },
   { value: 'diesel', label: 'Diesel' },
@@ -127,11 +137,6 @@ function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: s
       >
         <span className={value ? 'text-gray-300' : 'text-gray-500'}>{display}</span>
         <div className="flex items-center gap-1">
-          {value && (
-            <span onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-0.5 hover:text-white">
-              <X className="w-3 h-3" />
-            </span>
-          )}
           <CalendarDays className="w-4 h-4" />
         </div>
       </button>
@@ -253,8 +258,8 @@ export default function UsedExpenses() {
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [fromDate, setFromDate] = useState(defaultFromDate)
+  const [toDate, setToDate] = useState(todayISO)
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -296,9 +301,11 @@ export default function UsedExpenses() {
   const clearFilters = () => {
     setSearchQuery('')
     setTypeFilter('all')
-    setFromDate('')
-    setToDate('')
+    setFromDate(defaultFromDate())
+    setToDate(todayISO())
   }
+
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
 
   // Calculate totals by type
   const totalsByType = useMemo(() => {
@@ -688,7 +695,7 @@ export default function UsedExpenses() {
         <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
 
         {/* Clear Filters */}
-        {(searchQuery || typeFilter !== 'all' || fromDate || toDate) && (
+        {(searchQuery || typeFilter !== 'all' || !isDefaultDateRange) && (
           <button
             onClick={clearFilters}
             className="text-sm text-gray-500 hover:text-gray-300 underline"

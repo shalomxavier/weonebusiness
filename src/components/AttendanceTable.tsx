@@ -203,11 +203,6 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
       >
         <CalendarDays className="w-4 h-4 text-purple-400 flex-shrink-0" />
         <span className={`text-sm ${value ? 'text-white font-medium' : 'text-gray-400'}`}>{display}</span>
-        {value && (
-          <span onClick={(e) => { e.stopPropagation(); onChange('') }} className="text-gray-400 hover:text-white ml-1">
-            <X className="w-3 h-3" />
-          </span>
-        )}
       </button>
       {calendar}
     </div>

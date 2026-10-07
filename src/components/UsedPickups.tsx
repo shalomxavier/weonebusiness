@@ -25,6 +25,16 @@ interface Pickup {
   paymentMethod: 'bank' | 'cash' | 'both' | ''
 }
 
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+const todayISO = () => toISODate(new Date())
+const defaultFromDate = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 30)
+  return toISODate(d)
+}
+
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All Status' },
   { value: 'pending', label: 'Pending' },
@@ -130,11 +140,6 @@ function DatePicker({ value, onChange, placeholder = 'Select date' }: { value: s
       >
         <span className={value ? 'text-gray-300' : 'text-gray-500'}>{display}</span>
         <div className="flex items-center gap-1">
-          {value && (
-            <span onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-0.5 hover:text-white">
-              <X className="w-3 h-3" />
-            </span>
-          )}
           <CalendarDays className="w-4 h-4" />
         </div>
       </button>
@@ -209,8 +214,8 @@ export default function UsedPickups() {
   // Search, filter, and sort states
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'collected' | 'cancelled'>('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [fromDate, setFromDate] = useState(defaultFromDate)
+  const [toDate, setToDate] = useState(todayISO)
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -271,9 +276,11 @@ export default function UsedPickups() {
   const clearFilters = () => {
     setSearchQuery('')
     setStatusFilter('all')
-    setFromDate('')
-    setToDate('')
+    setFromDate(defaultFromDate())
+    setToDate(todayISO())
   }
+
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
 
   // Calculate displayed pickups based on showAll and pagination
   const displayedPickups = useMemo(() => {
@@ -400,7 +407,7 @@ export default function UsedPickups() {
         <DatePicker value={toDate} onChange={setToDate} placeholder="To date" />
 
         {/* Clear Filters */}
-        {(searchQuery || statusFilter !== 'all' || fromDate || toDate) && (
+        {(searchQuery || statusFilter !== 'all' || !isDefaultDateRange) && (
           <button
             onClick={clearFilters}
             className="text-sm text-gray-500 hover:text-gray-700 underline"
