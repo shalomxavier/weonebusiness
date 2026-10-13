@@ -7,7 +7,7 @@ import NewRemovalModal from './NewRemovalModal'
 import RemovalViewModal from './RemovalViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import ExportModal from './ExportModal'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 interface RemovalOrder {
   id: string
@@ -33,7 +33,6 @@ interface RemovalOrder {
 const toISODate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-const todayISO = () => toISODate(new Date())
 const defaultFromDate = () => {
   const d = new Date()
   d.setDate(d.getDate() - 30)
@@ -274,7 +273,7 @@ export default function RemovalsOrders() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all')
   const [fromDate, setFromDate] = useState(defaultFromDate)
-  const [toDate, setToDate] = useState(todayISO)
+  const [toDate, setToDate] = useState('')
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -331,7 +330,10 @@ export default function RemovalsOrders() {
   }, [orders, searchQuery, statusFilter, fromDate, toDate])
 
   // Export to Excel
-  const handleExport = (month: number, year: number) => {
+  const handleExport = async (month: number, year: number) => {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+    const gbp = (n: number) => `£${n.toFixed(2)}`
+
     // Filter orders by selected month and year
     const monthOrders = orders.filter(order => {
       const orderDate = new Date(order.removalDate)
@@ -344,32 +346,6 @@ export default function RemovalsOrders() {
       return advanceDate.getMonth() === month && advanceDate.getFullYear() === year && (parseFloat(order.advance) || 0) > 0
     })
 
-    // Prepare order data for export
-    const orderData = monthOrders.map((order, index) => ({
-      'No.': index + 1,
-      'Customer Name': order.customerName,
-      'Email': order.email,
-      'Phone': order.phone,
-      'Address': order.address,
-      'Postcode': order.postcode,
-      'Removal Date': order.removalDate,
-      'Time': `${order.startTime} - ${order.endTime}`,
-      'Total Price': parseFloat(order.totalPrice) || 0,
-      'Balance': Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0)),
-      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
-      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
-      'Notes': order.notes || '-',
-    }))
-    const advanceData = monthAdvances.map((order, index) => ({
-      'No.': index + 1,
-      'Advance Date': order.advanceDate,
-      'Customer Name': order.customerName,
-      'Phone': order.phone,
-      'Advance': parseFloat(order.advance) || 0,
-      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
-      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
-    }))
-
     // Calculate totals for the selected month
     const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
     const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
@@ -377,39 +353,149 @@ export default function RemovalsOrders() {
     const pendingCount = monthOrders.filter(o => o.status === 'pending').length
     const completedCount = monthOrders.filter(o => o.status === 'completed').length
 
-    // Prepare summary data
-    const summaryData = [
-      ['Removal Order Summary', ''],
+    const HEADER_BG = 'FF6A1B9A'
+    const HEADER_FG = 'FFFFFFFF'
+    const TOTAL_BG = 'FFE8D5F5'
+    const TOTAL_FG = 'FF4A148C'
+    const ALT_BG = 'FFF3E5FF'
+    const DEF_BG = 'FFFFFFFF'
+    const DEF_FG = 'FF212121'
+    const BORDER_COLOR = 'FFCE93D8'
+
+    const thinBorder = (): Partial<ExcelJS.Borders> => ({
+      top: { style: 'thin', color: { argb: BORDER_COLOR } },
+      left: { style: 'thin', color: { argb: BORDER_COLOR } },
+      bottom: { style: 'thin', color: { argb: BORDER_COLOR } },
+      right: { style: 'thin', color: { argb: BORDER_COLOR } },
+    })
+
+    const styleHeader = (row: ExcelJS.Row) => {
+      row.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
+        cell.font = { bold: true, color: { argb: HEADER_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+        cell.border = thinBorder()
+      })
+      row.height = 22
+    }
+
+    const styleData = (row: ExcelJS.Row, altRow: boolean, colAlign: (col: number) => ExcelJS.Alignment['horizontal']) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: altRow ? ALT_BG : DEF_BG } }
+        cell.font = { color: { argb: DEF_FG }, size: 12 }
+        cell.alignment = { vertical: 'middle', horizontal: colAlign(col) }
+        cell.border = thinBorder()
+      })
+      row.height = 18
+    }
+
+    const styleTotal = (row: ExcelJS.Row, rightCols: number[]) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
+        cell.font = { bold: true, color: { argb: TOTAL_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: rightCols.includes(col) ? 'right' : 'left' }
+        cell.border = thinBorder()
+      })
+      row.height = 20
+    }
+
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'We One Business'
+
+    // Removal Orders sheet
+    const wsOrders = wb.addWorksheet('Removal Orders')
+    wsOrders.columns = [
+      { width: 6 }, { width: 22 }, { width: 26 }, { width: 14 }, { width: 30 },
+      { width: 12 }, { width: 14 }, { width: 16 }, { width: 12 }, { width: 12 },
+      { width: 16 }, { width: 12 }, { width: 30 },
+    ]
+    const orderAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+      if (col === 9 || col === 10) return 'right'  // Total Price, Balance
+      if (col === 7) return 'center'               // Removal Date
+      return 'left'
+    }
+    styleHeader(wsOrders.addRow(['No.', 'Customer Name', 'Email', 'Phone', 'Address', 'Postcode', 'Removal Date', 'Time', 'Total Price', 'Balance', 'Payment Method', 'Status', 'Notes']))
+    monthOrders.forEach((order, i) => {
+      const row = wsOrders.addRow([
+        i + 1,
+        order.customerName,
+        order.email,
+        order.phone,
+        order.address,
+        order.postcode,
+        order.removalDate,
+        `${order.startTime} - ${order.endTime}`,
+        gbp(parseFloat(order.totalPrice) || 0),
+        gbp(Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0))),
+        cap(order.paymentMethod),
+        cap(order.status),
+        order.notes || '',
+      ])
+      styleData(row, i % 2 === 1, orderAlign)
+    })
+    wsOrders.addRow([])
+    styleTotal(wsOrders.addRow(['', 'TOTAL', '', '', '', '', '', '', gbp(monthlyTotal), gbp(monthlyBalance), '', '', '']), [9, 10])
+
+    // Advances sheet
+    const wsAdvances = wb.addWorksheet('Advances')
+    wsAdvances.columns = [
+      { width: 6 }, { width: 14 }, { width: 22 }, { width: 14 }, { width: 12 },
+      { width: 16 }, { width: 12 },
+    ]
+    const advanceAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+      if (col === 5) return 'right'   // Advance
+      if (col === 2) return 'center'  // Advance Date
+      return 'left'
+    }
+    styleHeader(wsAdvances.addRow(['No.', 'Advance Date', 'Customer Name', 'Phone', 'Advance', 'Payment Method', 'Status']))
+    monthAdvances.forEach((order, i) => {
+      const row = wsAdvances.addRow([
+        i + 1,
+        order.advanceDate,
+        order.customerName,
+        order.phone,
+        gbp(parseFloat(order.advance) || 0),
+        cap(order.paymentMethod),
+        cap(order.status),
+      ])
+      styleData(row, i % 2 === 1, advanceAlign)
+    })
+    wsAdvances.addRow([])
+    styleTotal(wsAdvances.addRow(['', 'TOTAL', '', '', gbp(monthlyAdvance), '', '']), [5])
+
+    // Summary sheet
+    const wsSummary = wb.addWorksheet('Summary')
+    wsSummary.columns = [{ width: 26 }, { width: 16 }]
+    const sumAlign = (col: number): ExcelJS.Alignment['horizontal'] => col === 2 ? 'right' : 'left'
+    styleHeader(wsSummary.addRow(['Removal Order Summary', '']))
+    ;([
       ['Total Orders', monthOrders.length],
       ['Pending', pendingCount],
       ['Completed', completedCount],
-      ['', ''],
-      ['Financial Summary', ''],
-      ['Total Revenue', monthlyTotal],
-      ['Total Advance', monthlyAdvance],
-      ['Total Balance', monthlyBalance],
-    ]
-
-    // Create workbook
-    const wb = XLSX.utils.book_new()
-
-    // Create orders sheet
-    const wsOrders = XLSX.utils.json_to_sheet(orderData)
-    XLSX.utils.book_append_sheet(wb, wsOrders, 'Removal Orders')
-
-    const wsAdvances = XLSX.utils.json_to_sheet(advanceData)
-    XLSX.utils.book_append_sheet(wb, wsAdvances, 'Advances')
-
-    // Create summary sheet
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+    ] as [string, string | number][]).forEach((r, i) => {
+      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
+    })
+    wsSummary.addRow([])
+    styleHeader(wsSummary.addRow(['Financial Summary', '']))
+    ;([
+      ['Total Revenue', gbp(monthlyTotal)],
+      ['Total Advance', gbp(monthlyAdvance)],
+      ['Total Balance', gbp(monthlyBalance)],
+    ] as [string, string][]).forEach((r, i) => {
+      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
+    })
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const filename = `RemovalOrders_${monthNames[month]}_${year}.xlsx`
 
-    // Download file
-    XLSX.writeFile(wb, filename)
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `RemovalOrders_${monthNames[month]}_${year}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // Clear all filters
@@ -417,10 +503,10 @@ export default function RemovalsOrders() {
     setSearchQuery('')
     setStatusFilter('all')
     setFromDate(defaultFromDate())
-    setToDate(todayISO())
+    setToDate('')
   }
 
-  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === ''
 
   // Calculate displayed orders based on showAll and pagination
   const displayedOrders = useMemo(() => {

@@ -19,6 +19,8 @@ interface Order {
   additionalNotes: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
+  cardAmount?: string
+  cashAmount?: string
   attachments?: string[]
 }
 
@@ -302,6 +304,8 @@ const emptyOrder: Omit<Order, 'id'> = {
   additionalNotes: '',
   paymentMethod: 'card',
   status: 'pending',
+  cardAmount: '',
+  cashAmount: '',
   attachments: [],
 }
 
@@ -311,15 +315,35 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
 
   useEffect(() => {
     if (editOrder) {
-      setFormData(editOrder)
+      setFormData({ ...emptyOrder, ...editOrder })
     } else {
       setFormData(emptyOrder)
     }
     setNewFiles([])
   }, [editOrder, isOpen])
 
+  const bothSplitRequired = formData.paymentMethod === 'both' && (formData.status === 'delivered' || parseFloat(formData.advance) > 0)
+  const bothTotalTarget = formData.status === 'delivered' ? (parseFloat(formData.price) || 0) : (parseFloat(formData.advance) || 0)
+  const bothSplitError = bothSplitRequired &&
+    Math.abs((parseFloat(formData.cardAmount || '0') + parseFloat(formData.cashAmount || '0')) - bothTotalTarget) > 0.001
+
+  const handleBothAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    const other = name === 'cardAmount' ? 'cashAmount' : 'cardAmount'
+    const numValue = parseFloat(value)
+    setFormData(prev => {
+      const next = { ...prev, [name]: value } as typeof prev
+      if (!isNaN(numValue) && bothTotalTarget > 0 && (prev[other] || '') === '') {
+        const otherVal = Math.max(0, bothTotalTarget - numValue)
+        next[other] = otherVal.toFixed(2)
+      }
+      return next
+    })
+  }
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (bothSplitError) return
     const orderData = {
       ...formData,
       id: editOrder?.id || Date.now().toString(),
@@ -577,7 +601,7 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
               <label className="block text-sm font-medium mb-1">Payment Method</label>
               <CustomSelect
                 value={formData.paymentMethod}
-                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v }))}
+                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v, cardAmount: '', cashAmount: '' }))}
                 options={[
                   { value: 'card', label: 'Card' },
                   { value: 'cash', label: 'Cash' },
@@ -586,6 +610,46 @@ export default function NewOrderModal({ isOpen, onClose, editOrder, onSave }: Ne
               />
             </div>
           </div>
+
+          {bothSplitRequired && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="cardAmount" className="block text-sm font-medium mb-1">
+                  Card Amount {formData.status !== 'delivered' && '(of advance)'}
+                </label>
+                <input
+                  type="number"
+                  id="cardAmount"
+                  name="cardAmount"
+                  value={formData.cardAmount}
+                  onChange={handleBothAmountChange}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="cashAmount" className="block text-sm font-medium mb-1">
+                  Cash Amount {formData.status !== 'delivered' && '(of advance)'}
+                </label>
+                <input
+                  type="number"
+                  id="cashAmount"
+                  name="cashAmount"
+                  value={formData.cashAmount}
+                  onChange={handleBothAmountChange}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  required
+                />
+              </div>
+              {bothSplitError && (
+                <p className="md:col-span-2 text-sm text-red-400">
+                  Card + Cash must equal £{bothTotalTarget.toFixed(2)}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-2">Attachments</label>

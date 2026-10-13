@@ -7,7 +7,7 @@ import NewOrderModal from './NewOrderModal'
 import OrderViewModal from './OrderViewModal'
 import DeleteConfirmModal from './DeleteConfirmModal'
 import ExportModal from './ExportModal'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 
 interface Order {
   id: string
@@ -26,13 +26,14 @@ interface Order {
   additionalNotes: string
   paymentMethod: 'card' | 'cash' | 'both'
   status: 'pending' | 'delivered' | 'cancelled'
+  cardAmount?: string
+  cashAmount?: string
   attachments?: string[]
 }
 
 const toISODate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-const todayISO = () => toISODate(new Date())
 const defaultFromDate = () => {
   const d = new Date()
   d.setDate(d.getDate() - 30)
@@ -224,7 +225,7 @@ export default function UsedOrders() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'delivered' | 'cancelled'>('all')
   const [fromDate, setFromDate] = useState(defaultFromDate)
-  const [toDate, setToDate] = useState(todayISO)
+  const [toDate, setToDate] = useState('')
 
   // Pagination states
   const [showAll, setShowAll] = useState(false)
@@ -293,7 +294,10 @@ export default function UsedOrders() {
   }, [orders, searchQuery, statusFilter, fromDate, toDate])
 
   // Export to Excel
-  const handleExport = (month: number, year: number) => {
+  const handleExport = async (month: number, year: number) => {
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+    const gbp = (n: number) => `£${n.toFixed(2)}`
+
     // Filter orders by selected month and year
     const monthOrders = orders.filter(order => {
       const orderDate = new Date(order.deliveryDate)
@@ -306,75 +310,232 @@ export default function UsedOrders() {
       return advanceDate.getMonth() === month && advanceDate.getFullYear() === year && (parseFloat(order.advance) || 0) > 0
     })
 
-    // Prepare order data for export
-    const orderData = monthOrders.map((order, index) => ({
-      'No.': index + 1,
-      'Item Number': order.itemNumber,
-      'Item Name': order.itemName,
-      'Price': parseFloat(order.price) || 0,
-      'Balance': Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)),
-      'Customer Name': order.customerName,
-      'Phone': order.phone,
-      'Address': order.address,
-      'Postcode': order.postcode,
-      'Delivery Date': order.deliveryDate,
-      'Delivery Time': `${order.deliveryStartTime} - ${order.deliveryEndTime}`,
-      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
-      'Notes': order.additionalNotes || '-',
-    }))
-    const advanceData = monthAdvances.map((order, index) => ({
-      'No.': index + 1,
-      'Advance Date': order.advanceDate,
-      'Item Number': order.itemNumber,
-      'Item Name': order.itemName,
-      'Customer Name': order.customerName,
-      'Advance': parseFloat(order.advance) || 0,
-      'Payment Method': order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1),
-      'Status': order.status.charAt(0).toUpperCase() + order.status.slice(1),
-    }))
-
     // Calculate totals for the selected month
     const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
     const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
     const monthlyBalance = monthOrders.reduce((sum, order) => sum + Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)), 0)
-    const pendingCount = monthOrders.filter(o => o.status === 'pending').length
-    const deliveredCount = monthOrders.filter(o => o.status === 'delivered').length
-    const cancelledCount = monthOrders.filter(o => o.status === 'cancelled').length
+    const HEADER_BG = 'FF6A1B9A'
+    const HEADER_FG = 'FFFFFFFF'
+    const TOTAL_BG = 'FFE8D5F5'
+    const TOTAL_FG = 'FF4A148C'
+    const ALT_BG = 'FFF3E5FF'
+    const DEF_BG = 'FFFFFFFF'
+    const DEF_FG = 'FF212121'
+    const BORDER_COLOR = 'FFCE93D8'
 
-    // Prepare summary data
-    const summaryData = [
-      ['Order Summary', ''],
-      ['Total Orders', monthOrders.length],
-      ['Pending', pendingCount],
-      ['Delivered', deliveredCount],
-      ['Cancelled', cancelledCount],
-      ['', ''],
-      ['Financial Summary', ''],
-      ['Total Revenue', monthlyTotal],
-      ['Total Advance', monthlyAdvance],
-      ['Total Balance', monthlyBalance],
+    const thinBorder = (): Partial<ExcelJS.Borders> => ({
+      top: { style: 'thin', color: { argb: BORDER_COLOR } },
+      left: { style: 'thin', color: { argb: BORDER_COLOR } },
+      bottom: { style: 'thin', color: { argb: BORDER_COLOR } },
+      right: { style: 'thin', color: { argb: BORDER_COLOR } },
+    })
+
+    const styleHeader = (row: ExcelJS.Row) => {
+      row.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
+        cell.font = { bold: true, color: { argb: HEADER_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+        cell.border = thinBorder()
+      })
+      row.height = 22
+    }
+
+    const styleData = (row: ExcelJS.Row, altRow: boolean, colAlign: (col: number) => ExcelJS.Alignment['horizontal']) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: altRow ? ALT_BG : DEF_BG } }
+        cell.font = { color: { argb: DEF_FG }, size: 12 }
+        cell.alignment = { vertical: 'middle', horizontal: colAlign(col) }
+        cell.border = thinBorder()
+      })
+      row.height = 18
+    }
+
+    const styleTotal = (row: ExcelJS.Row, rightCols: number[]) => {
+      row.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
+        cell.font = { bold: true, color: { argb: TOTAL_FG }, size: 14 }
+        cell.alignment = { vertical: 'middle', horizontal: rightCols.includes(col) ? 'right' : 'left' }
+        cell.border = thinBorder()
+      })
+      row.height = 20
+    }
+
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'We One Business'
+
+    // Split orders by payment method
+    const isInSelectedMonth = (dateStr: string) => {
+      const d = new Date(`${dateStr.split('T')[0]}T00:00:00`)
+      return d.getMonth() === month && d.getFullYear() === year
+    }
+
+    type PaymentRow = { itemNumber: string; itemName: string; customerName: string; date: string; type: 'Delivered' | 'Advance'; amount: number }
+    const cardRows: PaymentRow[] = []
+    const cashRows: PaymentRow[] = []
+
+    const addBothRows = (order: Order, rowType: 'Delivered' | 'Advance', total: number, date: string) => {
+      const cardAmt = parseFloat(order.cardAmount || '') || 0
+      const cashAmt = parseFloat(order.cashAmount || '') || 0
+      if (cardAmt > 0 || cashAmt > 0) {
+        if (cardAmt > 0) cardRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date, type: rowType, amount: cardAmt })
+        if (cashAmt > 0) cashRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date, type: rowType, amount: cashAmt })
+      } else {
+        // Legacy data fallback: split 50/50
+        cardRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date, type: rowType, amount: total / 2 })
+        cashRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date, type: rowType, amount: total / 2 })
+      }
+    }
+
+    monthOrders.forEach(order => {
+      if (order.status === 'cancelled') return
+      const deliveredAmount = Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0))
+
+      if (order.status === 'delivered') {
+        if (order.paymentMethod === 'card') {
+          cardRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date: order.deliveryDate, type: 'Delivered', amount: deliveredAmount })
+        } else if (order.paymentMethod === 'cash') {
+          cashRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date: order.deliveryDate, type: 'Delivered', amount: deliveredAmount })
+        } else if (order.paymentMethod === 'both') {
+          addBothRows(order, 'Delivered', deliveredAmount, order.deliveryDate)
+        }
+      }
+
+      if (order.advanceDate && isInSelectedMonth(order.advanceDate) && (parseFloat(order.advance) || 0) > 0) {
+        const advanceAmount = parseFloat(order.advance) || 0
+        if (order.paymentMethod === 'card') {
+          cardRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date: order.advanceDate, type: 'Advance', amount: advanceAmount })
+        } else if (order.paymentMethod === 'cash') {
+          cashRows.push({ itemNumber: order.itemNumber, itemName: order.itemName, customerName: order.customerName, date: order.advanceDate, type: 'Advance', amount: advanceAmount })
+        } else if (order.paymentMethod === 'both') {
+          addBothRows(order, 'Advance', advanceAmount, order.advanceDate)
+        }
+      }
+    })
+
+    const cardRevenue = cardRows.reduce((sum, r) => sum + r.amount, 0)
+    const cashRevenue = cashRows.reduce((sum, r) => sum + r.amount, 0)
+
+    const buildOrderSheet = (ws: ExcelJS.Worksheet, data: Order[], priceTotal: number, balanceTotal: number) => {
+      const columns = [
+        { width: 6 }, { width: 14 }, { width: 22 }, { width: 12 }, { width: 12 },
+        { width: 22 }, { width: 14 }, { width: 30 }, { width: 12 }, { width: 14 },
+        { width: 16 }, { width: 14 }, { width: 12 }, { width: 30 },
+      ]
+      const headers = ['No.', 'Item Number', 'Item Name', 'Price', 'Balance', 'Customer Name', 'Phone', 'Address', 'Postcode', 'Delivery Date', 'Delivery Time', 'Payment Method', 'Status', 'Notes']
+      ws.columns = columns
+
+      const orderAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+        if (col === 4 || col === 5) return 'right'
+        if (col === 10) return 'center'
+        return 'left'
+      }
+
+      styleHeader(ws.addRow(headers))
+      data.forEach((order, i) => {
+        const row = ws.addRow([
+          i + 1,
+          order.itemNumber,
+          order.itemName,
+          gbp(parseFloat(order.price) || 0),
+          gbp(Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0))),
+          order.customerName,
+          order.phone,
+          order.address,
+          order.postcode,
+          order.deliveryDate,
+          `${order.deliveryStartTime} - ${order.deliveryEndTime}`,
+          cap(order.paymentMethod),
+          cap(order.status),
+          order.additionalNotes || '',
+        ])
+        styleData(row, i % 2 === 1, orderAlign)
+      })
+      ws.addRow([])
+      styleTotal(ws.addRow(['', 'TOTAL', '', gbp(priceTotal), gbp(balanceTotal), '', '', '', '', '', '', '', '', '', '']), [4, 5])
+    }
+
+    const buildPaymentSheet = (ws: ExcelJS.Worksheet, rows: PaymentRow[], revenueTotal: number) => {
+      ws.columns = [
+        { width: 6 }, { width: 14 }, { width: 22 }, { width: 22 }, { width: 14 }, { width: 12 }, { width: 12 },
+      ]
+      const paymentAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+        if (col === 7) return 'right'
+        if (col === 5) return 'center'
+        return 'left'
+      }
+      styleHeader(ws.addRow(['No.', 'Item Number', 'Item Name', 'Customer Name', 'Date', 'Type', 'Amount']))
+      rows.forEach((r, i) => {
+        const row = ws.addRow([i + 1, r.itemNumber, r.itemName, r.customerName, r.date, r.type, gbp(r.amount)])
+        styleData(row, i % 2 === 1, paymentAlign)
+      })
+      ws.addRow([])
+      styleTotal(ws.addRow(['', 'TOTAL', '', '', '', '', gbp(revenueTotal)]), [7])
+    }
+
+    // Orders sheet
+    const wsOrders = wb.addWorksheet('Orders')
+    buildOrderSheet(wsOrders, monthOrders, monthlyTotal, monthlyBalance)
+
+    // Card Payments sheet
+    const wsCard = wb.addWorksheet('Card Payments')
+    buildPaymentSheet(wsCard, cardRows, cardRevenue)
+
+    // Cash Payments sheet
+    const wsCash = wb.addWorksheet('Cash Payments')
+    buildPaymentSheet(wsCash, cashRows, cashRevenue)
+
+    // Advances sheet
+    const wsAdvances = wb.addWorksheet('Advances')
+    wsAdvances.columns = [
+      { width: 6 }, { width: 14 }, { width: 14 }, { width: 22 }, { width: 22 },
+      { width: 12 }, { width: 16 }, { width: 12 },
     ]
+    const advanceAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+      if (col === 6) return 'right'
+      if (col === 2) return 'center'
+      return 'left'
+    }
+    styleHeader(wsAdvances.addRow(['No.', 'Advance Date', 'Item Number', 'Item Name', 'Customer Name', 'Advance', 'Payment Method', 'Status']))
+    monthAdvances.forEach((order, i) => {
+      const row = wsAdvances.addRow([
+        i + 1,
+        order.advanceDate,
+        order.itemNumber,
+        order.itemName,
+        order.customerName,
+        gbp(parseFloat(order.advance) || 0),
+        cap(order.paymentMethod),
+        cap(order.status),
+      ])
+      styleData(row, i % 2 === 1, advanceAlign)
+    })
+    wsAdvances.addRow([])
+    styleTotal(wsAdvances.addRow(['', 'TOTAL', '', '', '', gbp(monthlyAdvance), '', '']), [6])
 
-    // Create workbook
-    const wb = XLSX.utils.book_new()
-
-    // Create orders sheet
-    const wsOrders = XLSX.utils.json_to_sheet(orderData)
-    XLSX.utils.book_append_sheet(wb, wsOrders, 'Orders')
-
-    const wsAdvances = XLSX.utils.json_to_sheet(advanceData)
-    XLSX.utils.book_append_sheet(wb, wsAdvances, 'Advances')
-
-    // Create summary sheet
-    const wsSummary = XLSX.utils.aoa_to_sheet(summaryData)
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary')
+    // Summary sheet
+    const wsSummary = wb.addWorksheet('Summary')
+    wsSummary.columns = [{ width: 26 }, { width: 16 }]
+    const sumAlign = (col: number): ExcelJS.Alignment['horizontal'] => col === 2 ? 'right' : 'left'
+    styleHeader(wsSummary.addRow(['Payment Summary', '']))
+    ;([
+      ['Card Revenue', gbp(cardRevenue)],
+      ['Cash Revenue', gbp(cashRevenue)],
+      ['Total Payment Revenue', gbp(cardRevenue + cashRevenue)],
+    ] as [string, string][]).forEach((r, i) => {
+      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
+    })
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-    const filename = `Orders_${monthNames[month]}_${year}.xlsx`
 
-    // Download file
-    XLSX.writeFile(wb, filename)
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Orders_${monthNames[month]}_${year}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // Clear all filters
@@ -382,10 +543,10 @@ export default function UsedOrders() {
     setSearchQuery('')
     setStatusFilter('all')
     setFromDate(defaultFromDate())
-    setToDate(todayISO())
+    setToDate('')
   }
 
-  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === ''
 
   // Calculate displayed orders based on showAll and pagination
   const displayedOrders = useMemo(() => {

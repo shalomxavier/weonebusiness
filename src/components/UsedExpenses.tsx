@@ -464,7 +464,7 @@ export default function UsedExpenses() {
       Object.entries(byCategory).forEach(([cat, items]) => {
         items.forEach(e => {
           const amt = parseFloat(e.amount)
-          const row = ws.addRow([globalNo++, cat, modeName, `£${amt.toFixed(2)}`, e.date, e.notes || '-'])
+          const row = ws.addRow([globalNo++, cat, modeName, `£${amt.toFixed(2)}`, e.date, e.notes || ''])
           styleData(row, dataRowIndex % 2 === 1)
           dataRowIndex++
           modeTotal += amt

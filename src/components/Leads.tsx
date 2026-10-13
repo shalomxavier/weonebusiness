@@ -12,7 +12,6 @@ type FilterStatus = 'all' | EnquiryStatus
 const toISODate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-const todayISO = () => toISODate(new Date())
 const defaultFromDate = () => {
   const d = new Date()
   d.setDate(d.getDate() - 90)
@@ -255,7 +254,7 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all')
   const [fromDate, setFromDate] = useState(defaultFromDate)
-  const [toDate, setToDate] = useState(todayISO)
+  const [toDate, setToDate] = useState('')
   const [overdueModalOpen, setOverdueModalOpen] = useState(false)
 
   useEffect(() => {
@@ -341,10 +340,10 @@ export default function Leads() {
     setSearchQuery('')
     setStatusFilter('all')
     setFromDate(defaultFromDate())
-    setToDate(todayISO())
+    setToDate('')
   }
 
-  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === todayISO()
+  const isDefaultDateRange = fromDate === defaultFromDate() && toDate === ''
 
   const handleView = (e: Enquiry) => { setSelectedEnquiry(e); setViewModalOpen(true) }
   const handleEdit = (e: Enquiry) => { setSelectedEnquiry(e); setEditModalOpen(true) }
