@@ -729,7 +729,7 @@ export default function Dashboard() {
       )}
 
       {!isStaff && (
-        <div key="cards" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4 pb-8 lg:pb-0 animate-stack-up delay-300">
+        <div key="cards" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-12 w-full px-4 pb-8 animate-stack-up delay-300">
           <MetricCard 
             title="Used Goods Expense" 
             value={`£${metrics.usedGoodsExpense.toFixed(2)}`} 

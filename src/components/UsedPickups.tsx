@@ -300,9 +300,9 @@ export default function UsedPickups() {
     const monthlyTotal = monthPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.price) || 0), 0)
     const monthlyAdvance = monthAdvances.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
     const monthlyBalance = monthPickups.reduce((sum, pickup) => sum + Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0)), 0)
-    const pendingCount = monthPickups.filter(p => p.status === 'pending').length
-    const collectedCount = monthPickups.filter(p => p.status === 'collected').length
-    const cancelledCount = monthPickups.filter(p => p.status === 'cancelled').length
+    const collectedBalanceTotal = monthPickups
+      .filter(pickup => pickup.status === 'collected')
+      .reduce((sum, pickup) => sum + Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0)), 0)
 
     const HEADER_BG = 'FF6A1B9A'
     const HEADER_FG = 'FFFFFFFF'
@@ -424,21 +424,11 @@ export default function UsedPickups() {
     const wsSummary = wb.addWorksheet('Summary')
     wsSummary.columns = [{ width: 26 }, { width: 16 }]
     const sumAlign = (col: number): ExcelJS.Alignment['horizontal'] => col === 2 ? 'right' : 'left'
-    styleHeader(wsSummary.addRow(['Pickup Summary', '']))
+    styleHeader(wsSummary.addRow(['Expense Summary', '']))
     ;([
-      ['Total Pickups', monthPickups.length],
-      ['Pending', pendingCount],
-      ['Collected', collectedCount],
-      ['Cancelled', cancelledCount],
-    ] as [string, string | number][]).forEach((r, i) => {
-      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
-    })
-    wsSummary.addRow([])
-    styleHeader(wsSummary.addRow(['Financial Summary', '']))
-    ;([
-      ['Total Revenue', gbp(monthlyTotal)],
+      ['Collected Items Total', gbp(collectedBalanceTotal)],
       ['Total Advance', gbp(monthlyAdvance)],
-      ['Total Balance', gbp(monthlyBalance)],
+      ['Total Expense', gbp(collectedBalanceTotal + monthlyAdvance)],
     ] as [string, string][]).forEach((r, i) => {
       styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
     })

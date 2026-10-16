@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
-import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Bell, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown, Loader2 } from 'lucide-react'
+import { ChevronRight, X, LogOut, Package, Truck, Receipt, Users, FileText, ShoppingBag, Truck as TruckIcon, User, Menu, Target, UserPlus, CalendarCheck, Bell, Clock, LogIn, LogOut as LogOutIcon, ChevronLeft, ChevronDown, Loader2, Files, FileSpreadsheet } from 'lucide-react'
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
@@ -360,6 +360,17 @@ export default function Layout() {
           { id: 'used-orders', label: 'Orders', to: '/used/orders', icon: Package },
           { id: 'used-pickups', label: 'Pickups', to: '/used/pickups', icon: Truck },
           { id: 'used-expenses', label: 'Expenses', to: '/used/expenses', icon: Receipt },
+        ],
+      },
+      {
+        id: 'documents',
+        title: 'Documents',
+        icon: Files,
+        defaultOpen: false,
+        items: [
+          { id: 'documents-quotations', label: 'Quotations', to: '/documents/quotations', icon: FileText },
+          { id: 'documents-invoices', label: 'Invoices', to: '/documents/invoices', icon: FileSpreadsheet },
+          { id: 'documents-receipts', label: 'Receipts', to: '/documents/receipts', icon: Receipt },
         ],
       },
       {

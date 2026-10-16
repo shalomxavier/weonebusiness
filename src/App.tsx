@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard.tsx'
 import UsedOrders from './components/UsedOrders.tsx'
 import UsedPickups from './components/UsedPickups.tsx'
 import UsedExpenses from './components/UsedExpenses.tsx'
+import DocumentsPage from './components/DocumentsPage.tsx'
 import RemovalsOrders from './components/RemovalsOrders.tsx'
 import RemovalsExpenses from './components/RemovalsExpenses.tsx'
 import UserManage from './components/UserManage.tsx'
@@ -45,6 +46,9 @@ function App() {
                   <Route path="used/orders" element={<UsedOrders />} />
                   <Route path="used/pickups" element={<UsedPickups />} />
                   <Route path="used/expenses" element={<UsedExpenses />} />
+                  <Route path="documents/quotations" element={<DocumentsPage docType="quotation" />} />
+                  <Route path="documents/invoices" element={<DocumentsPage docType="invoice" />} />
+                  <Route path="documents/receipts" element={<DocumentsPage docType="receipt" />} />
                   <Route path="removals/orders" element={<RemovalsOrders />} />
                   <Route path="removals/expenses" element={<RemovalsExpenses />} />
                   <Route path="users/manage" element={<UserManage />} />
