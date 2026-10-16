@@ -439,7 +439,6 @@ export default function RemovalsExpenses() {
         })
       })
 
-      ws.addRow([])
       const totalRow = ws.addRow(['', 'TOTAL', '', `£${modeTotal.toFixed(2)}`, '', ''])
       styleTotal(totalRow)
     }
@@ -469,7 +468,6 @@ export default function RemovalsExpenses() {
         row.height = 18
       })
 
-      ws.addRow([])
       const totalRow = ws.addRow(['Grand Total', `£${grandTotal.toFixed(2)}`])
       styleTotal(totalRow, 2)
     }
@@ -545,7 +543,6 @@ export default function RemovalsExpenses() {
         ? ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, `£${totals.other.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
         : ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
 
-      ws.addRow([])
       const totalRow = ws.addRow(totalValues)
       totalRow.eachCell({ includeEmpty: true }, (cell, col) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }

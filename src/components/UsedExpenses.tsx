@@ -368,14 +368,24 @@ export default function UsedExpenses() {
       if (!p.pickupDate) return
       const pickupDate = p.pickupDate.split('T')[0] || p.pickupDate
       if (pickupDate < fromDate || pickupDate > toDate) return
+      const price = parseFloat(p.price) || 0
+      if (price <= 0) return
       const label = p.additionalNotes || ''
       const pm = (p.paymentMethod || '').toLowerCase()
       if (pm === 'both') {
-        if (p.bankAmount && parseFloat(p.bankAmount) > 0) {
-          pickupExpenses.push({ id: docSnap.id + '-bank', type: 'Pickup', mode: 'Bank Payment', amount: p.bankAmount, date: p.pickupDate, notes: label })
-        }
-        if (p.cashAmount && parseFloat(p.cashAmount) > 0) {
-          pickupExpenses.push({ id: docSnap.id + '-cash', type: 'Pickup', mode: 'Cash', amount: p.cashAmount, date: p.pickupDate, notes: label })
+        const bankAmt = parseFloat(p.bankAmount || '') || 0
+        const cashAmt = parseFloat(p.cashAmount || '') || 0
+        if (bankAmt > 0 || cashAmt > 0) {
+          if (bankAmt > 0) {
+            pickupExpenses.push({ id: docSnap.id + '-bank', type: 'Pickup', mode: 'Bank Payment', amount: bankAmt.toFixed(2), date: p.pickupDate, notes: label })
+          }
+          if (cashAmt > 0) {
+            pickupExpenses.push({ id: docSnap.id + '-cash', type: 'Pickup', mode: 'Cash', amount: cashAmt.toFixed(2), date: p.pickupDate, notes: label })
+          }
+        } else {
+          // Legacy data fallback: 'both' with no split amounts — split 50/50
+          pickupExpenses.push({ id: docSnap.id + '-bank', type: 'Pickup', mode: 'Bank Payment', amount: (price / 2).toFixed(2), date: p.pickupDate, notes: label })
+          pickupExpenses.push({ id: docSnap.id + '-cash', type: 'Pickup', mode: 'Cash', amount: (price / 2).toFixed(2), date: p.pickupDate, notes: label })
         }
       } else {
         const mode = pm === 'bank' ? 'Bank Payment' : pm === 'cash' ? 'Cash' : 'Unspecified'
@@ -471,7 +481,6 @@ export default function UsedExpenses() {
         })
       })
 
-      ws.addRow([])
       const totalRow = ws.addRow(['', 'TOTAL', '', `£${modeTotal.toFixed(2)}`, '', ''])
       styleTotal(totalRow)
     }
@@ -501,7 +510,6 @@ export default function UsedExpenses() {
         row.height = 18
       })
 
-      ws.addRow([])
       const totalRow = ws.addRow(['Grand Total', `£${grandTotal.toFixed(2)}`])
       styleTotal(totalRow, 2)
     }
@@ -577,7 +585,6 @@ export default function UsedExpenses() {
         ? ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, `£${totals.other.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
         : ['TOTAL', `£${totals.cash.toFixed(2)}`, `£${totals.bank.toFixed(2)}`, totals.count, `£${totals.total.toFixed(2)}`]
 
-      ws.addRow([])
       const totalRow = ws.addRow(totalValues)
       totalRow.eachCell({ includeEmpty: true }, (cell, col) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }

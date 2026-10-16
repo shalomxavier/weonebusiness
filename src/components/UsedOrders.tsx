@@ -450,7 +450,6 @@ export default function UsedOrders() {
         ])
         styleData(row, i % 2 === 1, orderAlign)
       })
-      ws.addRow([])
       styleTotal(ws.addRow(['', 'TOTAL', '', gbp(priceTotal), gbp(balanceTotal), '', '', '', '', '', '', '', '', '', '']), [4, 5])
     }
 
@@ -468,7 +467,6 @@ export default function UsedOrders() {
         const row = ws.addRow([i + 1, r.itemNumber, r.itemName, r.customerName, r.date, r.type, gbp(r.amount)])
         styleData(row, i % 2 === 1, paymentAlign)
       })
-      ws.addRow([])
       styleTotal(ws.addRow(['', 'TOTAL', '', '', '', '', gbp(revenueTotal)]), [7])
     }
 
@@ -509,7 +507,6 @@ export default function UsedOrders() {
       ])
       styleData(row, i % 2 === 1, advanceAlign)
     })
-    wsAdvances.addRow([])
     styleTotal(wsAdvances.addRow(['', 'TOTAL', '', '', '', gbp(monthlyAdvance), '', '']), [6])
 
     // Summary sheet

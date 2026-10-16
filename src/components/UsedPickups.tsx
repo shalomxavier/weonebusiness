@@ -303,6 +303,7 @@ export default function UsedPickups() {
     const collectedBalanceTotal = monthPickups
       .filter(pickup => pickup.status === 'collected')
       .reduce((sum, pickup) => sum + Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0)), 0)
+    const monthPickupsAdvanceTotal = monthPickups.reduce((sum, pickup) => sum + (parseFloat(pickup.advance) || 0), 0)
 
     const HEADER_BG = 'FF6A1B9A'
     const HEADER_FG = 'FFFFFFFF'
@@ -350,6 +351,48 @@ export default function UsedPickups() {
       row.height = 20
     }
 
+    // Split pickups into payment rows by method (payment-date basis)
+    const isInSelectedMonth = (dateStr: string) => {
+      const d = new Date(`${dateStr.split('T')[0]}T00:00:00`)
+      return d.getMonth() === month && d.getFullYear() === year
+    }
+
+    type PaymentRow = { pickupNumber: string; itemName: string; customerName: string; date: string; type: 'Collected' | 'Advance'; amount: number }
+    const bankRows: PaymentRow[] = []
+    const cashRows: PaymentRow[] = []
+
+    const addPaymentRow = (pickup: Pickup, rowType: 'Collected' | 'Advance', total: number, date: string) => {
+      const row = { pickupNumber: pickup.pickupNumber, itemName: pickup.itemName, customerName: pickup.customerName, date, type: rowType }
+      if (pickup.paymentMethod === 'bank') {
+        bankRows.push({ ...row, amount: total })
+      } else if (pickup.paymentMethod === 'cash') {
+        cashRows.push({ ...row, amount: total })
+      } else if (pickup.paymentMethod === 'both') {
+        const bankAmt = parseFloat(pickup.bankAmount || '') || 0
+        const cashAmt = parseFloat(pickup.cashAmount || '') || 0
+        if (bankAmt > 0 || cashAmt > 0) {
+          if (bankAmt > 0) bankRows.push({ ...row, amount: bankAmt })
+          if (cashAmt > 0) cashRows.push({ ...row, amount: cashAmt })
+        } else {
+          bankRows.push({ ...row, amount: total / 2 })
+          cashRows.push({ ...row, amount: total / 2 })
+        }
+      }
+    }
+
+    pickups.forEach(pickup => {
+      if (pickup.status === 'cancelled') return
+      if (pickup.status === 'collected' && pickup.pickupDate && isInSelectedMonth(pickup.pickupDate)) {
+        addPaymentRow(pickup, 'Collected', Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0)), pickup.pickupDate)
+      }
+      if (pickup.advanceDate && isInSelectedMonth(pickup.advanceDate) && (parseFloat(pickup.advance) || 0) > 0) {
+        addPaymentRow(pickup, 'Advance', parseFloat(pickup.advance) || 0, pickup.advanceDate)
+      }
+    })
+
+    const bankPaid = bankRows.reduce((sum, r) => sum + r.amount, 0)
+    const cashPaid = cashRows.reduce((sum, r) => sum + r.amount, 0)
+
     const wb = new ExcelJS.Workbook()
     wb.creator = 'We One Business'
 
@@ -357,21 +400,22 @@ export default function UsedPickups() {
     const wsPickups = wb.addWorksheet('Pickups')
     wsPickups.columns = [
       { width: 6 }, { width: 14 }, { width: 22 }, { width: 12 }, { width: 12 },
-      { width: 22 }, { width: 14 }, { width: 30 }, { width: 12 }, { width: 14 },
-      { width: 16 }, { width: 12 }, { width: 30 },
+      { width: 12 }, { width: 22 }, { width: 14 }, { width: 30 }, { width: 12 },
+      { width: 14 }, { width: 16 }, { width: 12 }, { width: 30 },
     ]
     const pickupAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
-      if (col === 4 || col === 5) return 'right'  // Price, Balance
-      if (col === 10) return 'center'           // Pickup Date
+      if (col === 4 || col === 5 || col === 6) return 'right'  // Price, Advance, Balance
+      if (col === 11) return 'center'                        // Pickup Date
       return 'left'
     }
-    styleHeader(wsPickups.addRow(['No.', 'Pickup Number', 'Item Name', 'Price', 'Balance', 'Customer Name', 'Phone', 'Address', 'Postcode', 'Pickup Date', 'Pickup Time', 'Status', 'Notes']))
+    styleHeader(wsPickups.addRow(['No.', 'Pickup Number', 'Item Name', 'Price', 'Advance', 'Balance', 'Customer Name', 'Phone', 'Address', 'Postcode', 'Pickup Date', 'Pickup Time', 'Status', 'Notes']))
     monthPickups.forEach((pickup, i) => {
       const row = wsPickups.addRow([
         i + 1,
         pickup.pickupNumber,
         pickup.itemName,
         gbp(parseFloat(pickup.price) || 0),
+        gbp(parseFloat(pickup.advance) || 0),
         gbp(Math.max(0, (parseFloat(pickup.price) || 0) - (parseFloat(pickup.advance) || 0))),
         pickup.customerName,
         pickup.phone,
@@ -384,8 +428,30 @@ export default function UsedPickups() {
       ])
       styleData(row, i % 2 === 1, pickupAlign)
     })
-    wsPickups.addRow([])
-    styleTotal(wsPickups.addRow(['', 'TOTAL', '', gbp(monthlyTotal), gbp(monthlyBalance), '', '', '', '', '', '', '', '', '']), [4, 5])
+    styleTotal(wsPickups.addRow(['', 'TOTAL', '', gbp(monthlyTotal), gbp(monthPickupsAdvanceTotal), gbp(monthlyBalance), '', '', '', '', '', '', '', '', '']), [4, 5, 6])
+
+    const buildPaymentSheet = (ws: ExcelJS.Worksheet, rows: PaymentRow[], paidTotal: number) => {
+      ws.columns = [
+        { width: 6 }, { width: 14 }, { width: 22 }, { width: 22 }, { width: 14 }, { width: 12 }, { width: 12 },
+      ]
+      const paymentAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+        if (col === 7) return 'right'
+        if (col === 5) return 'center'
+        return 'left'
+      }
+      styleHeader(ws.addRow(['No.', 'Pickup Number', 'Item Name', 'Customer Name', 'Date', 'Type', 'Amount']))
+      rows.forEach((r, i) => {
+        const row = ws.addRow([i + 1, r.pickupNumber, r.itemName, r.customerName, r.date, r.type, gbp(r.amount)])
+        styleData(row, i % 2 === 1, paymentAlign)
+      })
+      styleTotal(ws.addRow(['', 'TOTAL', '', '', '', '', gbp(paidTotal)]), [7])
+    }
+
+    // Bank Payments sheet
+    buildPaymentSheet(wb.addWorksheet('Bank Payments'), bankRows, bankPaid)
+
+    // Cash Payments sheet
+    buildPaymentSheet(wb.addWorksheet('Cash Payments'), cashRows, cashPaid)
 
     // Advances sheet
     const wsAdvances = wb.addWorksheet('Advances')
@@ -417,21 +483,29 @@ export default function UsedPickups() {
       ])
       styleData(row, i % 2 === 1, advanceAlign)
     })
-    wsAdvances.addRow([])
     styleTotal(wsAdvances.addRow(['', 'TOTAL', '', '', '', gbp(monthlyAdvance), '', '', '', '']), [6, 7, 8])
 
     // Summary sheet
     const wsSummary = wb.addWorksheet('Summary')
     wsSummary.columns = [{ width: 26 }, { width: 16 }]
     const sumAlign = (col: number): ExcelJS.Alignment['horizontal'] => col === 2 ? 'right' : 'left'
-    styleHeader(wsSummary.addRow(['Expense Summary', '']))
+    styleHeader(wsSummary.addRow(['Expense Summary', 'Amount']))
     ;([
-      ['Collected Items Total', gbp(collectedBalanceTotal)],
-      ['Total Advance', gbp(monthlyAdvance)],
-      ['Total Expense', gbp(collectedBalanceTotal + monthlyAdvance)],
+      ['Advances Total', gbp(monthlyAdvance)],
+      ['Pickups Total', gbp(collectedBalanceTotal)],
     ] as [string, string][]).forEach((r, i) => {
       styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
     })
+    styleTotal(wsSummary.addRow(['Total', gbp(collectedBalanceTotal + monthlyAdvance)]), [2])
+    wsSummary.addRow([])
+    styleHeader(wsSummary.addRow(['Payments', 'Amount']))
+    ;([
+      ['Bank Payments', gbp(bankPaid)],
+      ['Cash Payments', gbp(cashPaid)],
+    ] as [string, string][]).forEach((r, i) => {
+      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
+    })
+    styleTotal(wsSummary.addRow(['Total', gbp(bankPaid + cashPaid)]), [2])
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']

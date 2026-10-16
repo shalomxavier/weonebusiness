@@ -50,8 +50,10 @@ export default function NewPickupModal({ isOpen, onClose, editPickup, editId, on
     bankAmount: '',
     cashAmount: '',
   })
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
   useEffect(() => {
+    setSubmitAttempted(false)
     if (editPickup) {
       setFormData(editPickup)
     } else {
@@ -153,8 +155,32 @@ function CustomSelect<T extends string>({ value, onChange, options, placeholder 
     }))
   }
 
+  const paymentRequired = (parseFloat(formData.price) || 0) > 0 || (parseFloat(formData.advance) || 0) > 0
+  const paymentMethodError = paymentRequired && !formData.paymentMethod
+  const bothSplitRequired = formData.paymentMethod === 'both' && paymentRequired
+  const bothTotalTarget = formData.status === 'collected' || !(parseFloat(formData.advance) > 0)
+    ? (parseFloat(formData.price) || 0)
+    : (parseFloat(formData.advance) || 0)
+  const bothSplitError = bothSplitRequired &&
+    Math.abs((parseFloat(formData.bankAmount || '0') + parseFloat(formData.cashAmount || '0')) - bothTotalTarget) > 0.001
+
+  const handleBothAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    const other = name === 'bankAmount' ? 'cashAmount' : 'bankAmount'
+    const numValue = parseFloat(value)
+    setFormData(prev => {
+      const next = { ...prev, [name]: value } as typeof prev
+      if (!isNaN(numValue) && bothTotalTarget > 0 && (prev[other] || '') === '') {
+        next[other] = Math.max(0, bothTotalTarget - numValue).toFixed(2)
+      }
+      return next
+    })
+  }
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
+    setSubmitAttempted(true)
+    if (paymentMethodError || bothSplitError) return
     const pickupRecord = {
       ...formData,
       id: editId || Date.now().toString(),
@@ -560,7 +586,7 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Payment Method</label>
+              <label className="block text-sm font-medium mb-1">Payment Method {paymentRequired && <span className="text-red-400">*</span>}</label>
               <CustomSelect
                 value={formData.paymentMethod}
                 onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v, bankAmount: '', cashAmount: '' }))}
@@ -571,14 +597,18 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
                   { value: 'both', label: 'Both' },
                 ]}
               />
+              {submitAttempted && paymentMethodError && (
+                <p className="text-red-400 text-xs mt-2">Payment method is required when price or advance is greater than 0.</p>
+              )}
               {formData.paymentMethod === 'both' && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
                   <div>
                     <label className="block text-xs font-medium mb-1 text-gray-400">Bank Amount</label>
                     <input
                       type="number"
+                      name="bankAmount"
                       value={formData.bankAmount ?? ''}
-                      onChange={(e) => setFormData(p => ({ ...p, bankAmount: e.target.value }))}
+                      onChange={handleBothAmountChange}
                       onWheel={(e) => e.currentTarget.blur()}
                       placeholder="£0.00"
                       className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
@@ -588,14 +618,18 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
                     <label className="block text-xs font-medium mb-1 text-gray-400">Cash Amount</label>
                     <input
                       type="number"
+                      name="cashAmount"
                       value={formData.cashAmount ?? ''}
-                      onChange={(e) => setFormData(p => ({ ...p, cashAmount: e.target.value }))}
+                      onChange={handleBothAmountChange}
                       onWheel={(e) => e.currentTarget.blur()}
                       placeholder="£0.00"
                       className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     />
                   </div>
                 </div>
+              )}
+              {formData.paymentMethod === 'both' && submitAttempted && bothSplitError && (
+                <p className="text-red-400 text-xs mt-2">Bank and Cash amounts must add up to £{bothTotalTarget.toFixed(2)}.</p>
               )}
             </div>
           </div>

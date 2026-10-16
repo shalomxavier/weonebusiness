@@ -433,7 +433,6 @@ export default function RemovalsOrders() {
       ])
       styleData(row, i % 2 === 1, orderAlign)
     })
-    wsOrders.addRow([])
     styleTotal(wsOrders.addRow(['', 'TOTAL', '', '', '', '', '', '', gbp(monthlyTotal), gbp(monthlyBalance), '', '', '']), [9, 10])
 
     // Advances sheet
@@ -460,7 +459,6 @@ export default function RemovalsOrders() {
       ])
       styleData(row, i % 2 === 1, advanceAlign)
     })
-    wsAdvances.addRow([])
     styleTotal(wsAdvances.addRow(['', 'TOTAL', '', '', gbp(monthlyAdvance), '', '']), [5])
 
     // Summary sheet
