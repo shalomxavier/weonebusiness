@@ -20,6 +20,8 @@ interface RemovalOrder {
   status: 'pending' | 'completed'
   type: 'removal' | 'clearance' | 'man_with_van'
   typeNote?: string
+  cardAmount?: string
+  cashAmount?: string
   attachments?: string[]
 }
 
@@ -136,6 +138,8 @@ const emptyRemoval: Omit<RemovalOrder, 'id'> = {
   status: 'pending',
   type: 'removal',
   typeNote: '',
+  cardAmount: '',
+  cashAmount: '',
   attachments: [],
 }
 
@@ -152,8 +156,28 @@ export default function NewRemovalModal({ isOpen, onClose, onSave, editRemoval, 
     setNewFiles([])
   }, [editRemoval, isOpen])
 
+  const bothSplitRequired = formData.paymentMethod === 'both' && (formData.status === 'completed' || parseFloat(formData.advance) > 0)
+  const bothTotalTarget = formData.status === 'completed' ? (parseFloat(formData.totalPrice) || 0) : (parseFloat(formData.advance) || 0)
+  const bothSplitError = bothSplitRequired &&
+    Math.abs((parseFloat(formData.cardAmount || '0') + parseFloat(formData.cashAmount || '0')) - bothTotalTarget) > 0.001
+
+  const handleBothAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    const other = name === 'cardAmount' ? 'cashAmount' : 'cardAmount'
+    const numValue = parseFloat(value)
+    setFormData(prev => {
+      const next = { ...prev, [name]: value } as typeof prev
+      if (!isNaN(numValue) && bothTotalTarget > 0 && (prev[other] || '') === '') {
+        const otherVal = Math.max(0, bothTotalTarget - numValue)
+        next[other] = otherVal.toFixed(2)
+      }
+      return next
+    })
+  }
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (bothSplitError) return
     const orderData = {
       ...formData,
       id: editId ?? Date.now().toString(),
@@ -583,7 +607,7 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
               <label className="block text-sm font-medium mb-1">Payment Method</label>
               <CustomSelect
                 value={formData.paymentMethod}
-                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v }))}
+                onChange={(v) => setFormData(p => ({ ...p, paymentMethod: v, cardAmount: '', cashAmount: '' }))}
                 options={PAYMENT_METHODS as { value: 'card' | 'cash' | 'both'; label: string }[]}
               />
             </div>
@@ -616,6 +640,50 @@ function TimePicker({ value, onChange, placeholder = '14:30' }: { value: string;
               />
             </div>
           </div>
+
+          {bothSplitRequired && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="cardAmount" className="block text-sm font-medium mb-1">
+                  Card Amount {formData.status !== 'completed' && '(of advance)'}
+                </label>
+                <input
+                  type="number"
+                  id="cardAmount"
+                  name="cardAmount"
+                  value={formData.cardAmount}
+                  onChange={handleBothAmountChange}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="0.00"
+                  step="0.01"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="cashAmount" className="block text-sm font-medium mb-1">
+                  Cash Amount {formData.status !== 'completed' && '(of advance)'}
+                </label>
+                <input
+                  type="number"
+                  id="cashAmount"
+                  name="cashAmount"
+                  value={formData.cashAmount}
+                  onChange={handleBothAmountChange}
+                  onWheel={(e) => e.currentTarget.blur()}
+                  className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  placeholder="0.00"
+                  step="0.01"
+                  required
+                />
+              </div>
+              {bothSplitError && (
+                <p className="md:col-span-2 text-sm text-red-400">
+                  Card + Cash must equal £{bothTotalTarget.toFixed(2)}
+                </p>
+              )}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium mb-2">Attachments</label>

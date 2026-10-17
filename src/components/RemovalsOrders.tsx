@@ -27,6 +27,8 @@ interface RemovalOrder {
   status: 'pending' | 'completed'
   type: 'removal' | 'clearance' | 'man_with_van'
   typeNote?: string
+  cardAmount?: string
+  cashAmount?: string
   attachments?: string[]
 }
 
@@ -349,9 +351,6 @@ export default function RemovalsOrders() {
     // Calculate totals for the selected month
     const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.totalPrice) || 0), 0)
     const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
-    const monthlyBalance = monthOrders.reduce((sum, order) => sum + Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0)), 0)
-    const pendingCount = monthOrders.filter(o => o.status === 'pending').length
-    const completedCount = monthOrders.filter(o => o.status === 'completed').length
 
     const HEADER_BG = 'FF6A1B9A'
     const HEADER_FG = 'FFFFFFFF'
@@ -402,6 +401,73 @@ export default function RemovalsOrders() {
     const wb = new ExcelJS.Workbook()
     wb.creator = 'We One Business'
 
+    // Split orders by payment method
+    const isInSelectedMonth = (dateStr: string) => {
+      const d = new Date(`${dateStr.split('T')[0]}T00:00:00`)
+      return d.getMonth() === month && d.getFullYear() === year
+    }
+
+    type PaymentRow = { customerName: string; date: string; type: 'Completed' | 'Advance'; amount: number }
+    const cardRows: PaymentRow[] = []
+    const cashRows: PaymentRow[] = []
+
+    const addBothRows = (order: RemovalOrder, rowType: 'Completed' | 'Advance', total: number, date: string) => {
+      const cardAmt = parseFloat(order.cardAmount || '') || 0
+      const cashAmt = parseFloat(order.cashAmount || '') || 0
+      if (cardAmt > 0 || cashAmt > 0) {
+        if (cardAmt > 0) cardRows.push({ customerName: order.customerName, date, type: rowType, amount: cardAmt })
+        if (cashAmt > 0) cashRows.push({ customerName: order.customerName, date, type: rowType, amount: cashAmt })
+      } else {
+        // Legacy data fallback: split 50/50
+        cardRows.push({ customerName: order.customerName, date, type: rowType, amount: total / 2 })
+        cashRows.push({ customerName: order.customerName, date, type: rowType, amount: total / 2 })
+      }
+    }
+
+    monthOrders.forEach(order => {
+      if (order.status === 'completed') {
+        const completedAmount = Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0))
+        if (order.paymentMethod === 'card') {
+          cardRows.push({ customerName: order.customerName, date: order.removalDate, type: 'Completed', amount: completedAmount })
+        } else if (order.paymentMethod === 'cash') {
+          cashRows.push({ customerName: order.customerName, date: order.removalDate, type: 'Completed', amount: completedAmount })
+        } else if (order.paymentMethod === 'both') {
+          addBothRows(order, 'Completed', completedAmount, order.removalDate)
+        }
+      }
+
+      if (order.advanceDate && isInSelectedMonth(order.advanceDate) && (parseFloat(order.advance) || 0) > 0) {
+        const advanceAmount = parseFloat(order.advance) || 0
+        if (order.paymentMethod === 'card') {
+          cardRows.push({ customerName: order.customerName, date: order.advanceDate, type: 'Advance', amount: advanceAmount })
+        } else if (order.paymentMethod === 'cash') {
+          cashRows.push({ customerName: order.customerName, date: order.advanceDate, type: 'Advance', amount: advanceAmount })
+        } else if (order.paymentMethod === 'both') {
+          addBothRows(order, 'Advance', advanceAmount, order.advanceDate)
+        }
+      }
+    })
+
+    const cardRevenue = cardRows.reduce((sum, r) => sum + r.amount, 0)
+    const cashRevenue = cashRows.reduce((sum, r) => sum + r.amount, 0)
+
+    const buildPaymentSheet = (ws: ExcelJS.Worksheet, rows: PaymentRow[], revenueTotal: number) => {
+      ws.columns = [
+        { width: 6 }, { width: 22 }, { width: 14 }, { width: 12 }, { width: 12 },
+      ]
+      const paymentAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
+        if (col === 5) return 'right'
+        if (col === 3) return 'center'
+        return 'left'
+      }
+      styleHeader(ws.addRow(['No.', 'Customer Name', 'Date', 'Type', 'Amount']))
+      rows.forEach((r, i) => {
+        const row = ws.addRow([i + 1, r.customerName, r.date, r.type, gbp(r.amount)])
+        styleData(row, i % 2 === 1, paymentAlign)
+      })
+      styleTotal(ws.addRow(['', 'TOTAL', '', '', gbp(revenueTotal)]), [5])
+    }
+
     // Removal Orders sheet
     const wsOrders = wb.addWorksheet('Removal Orders')
     wsOrders.columns = [
@@ -410,11 +476,11 @@ export default function RemovalsOrders() {
       { width: 16 }, { width: 12 }, { width: 30 },
     ]
     const orderAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
-      if (col === 9 || col === 10) return 'right'  // Total Price, Balance
+      if (col === 9 || col === 10) return 'right'  // Price, Advance
       if (col === 7) return 'center'               // Removal Date
       return 'left'
     }
-    styleHeader(wsOrders.addRow(['No.', 'Customer Name', 'Email', 'Phone', 'Address', 'Postcode', 'Removal Date', 'Time', 'Total Price', 'Balance', 'Payment Method', 'Status', 'Notes']))
+    styleHeader(wsOrders.addRow(['No.', 'Customer Name', 'Email', 'Phone', 'Address', 'Postcode', 'Removal Date', 'Time', 'Price', 'Advance', 'Payment Method', 'Status', 'Notes']))
     monthOrders.forEach((order, i) => {
       const row = wsOrders.addRow([
         i + 1,
@@ -426,14 +492,22 @@ export default function RemovalsOrders() {
         order.removalDate,
         `${order.startTime} - ${order.endTime}`,
         gbp(parseFloat(order.totalPrice) || 0),
-        gbp(Math.max(0, (parseFloat(order.totalPrice) || 0) - (parseFloat(order.advance) || 0))),
+        gbp(parseFloat(order.advance) || 0),
         cap(order.paymentMethod),
         cap(order.status),
         order.notes || '',
       ])
       styleData(row, i % 2 === 1, orderAlign)
     })
-    styleTotal(wsOrders.addRow(['', 'TOTAL', '', '', '', '', '', '', gbp(monthlyTotal), gbp(monthlyBalance), '', '', '']), [9, 10])
+    styleTotal(wsOrders.addRow(['', 'TOTAL', '', '', '', '', '', '', gbp(monthlyTotal), gbp(monthlyAdvance), '', '', '']), [9, 10])
+
+    // Card Payments sheet
+    const wsCard = wb.addWorksheet('Card Payments')
+    buildPaymentSheet(wsCard, cardRows, cardRevenue)
+
+    // Cash Payments sheet
+    const wsCash = wb.addWorksheet('Cash Payments')
+    buildPaymentSheet(wsCash, cashRows, cashRevenue)
 
     // Advances sheet
     const wsAdvances = wb.addWorksheet('Advances')
@@ -465,23 +539,14 @@ export default function RemovalsOrders() {
     const wsSummary = wb.addWorksheet('Summary')
     wsSummary.columns = [{ width: 26 }, { width: 16 }]
     const sumAlign = (col: number): ExcelJS.Alignment['horizontal'] => col === 2 ? 'right' : 'left'
-    styleHeader(wsSummary.addRow(['Removal Order Summary', '']))
+    styleHeader(wsSummary.addRow(['Payment Summary', '']))
     ;([
-      ['Total Orders', monthOrders.length],
-      ['Pending', pendingCount],
-      ['Completed', completedCount],
-    ] as [string, string | number][]).forEach((r, i) => {
-      styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
-    })
-    wsSummary.addRow([])
-    styleHeader(wsSummary.addRow(['Financial Summary', '']))
-    ;([
-      ['Total Revenue', gbp(monthlyTotal)],
-      ['Total Advance', gbp(monthlyAdvance)],
-      ['Total Balance', gbp(monthlyBalance)],
+      ['Card Revenue', gbp(cardRevenue)],
+      ['Cash Revenue', gbp(cashRevenue)],
     ] as [string, string][]).forEach((r, i) => {
       styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
     })
+    styleTotal(wsSummary.addRow(['Total', gbp(cardRevenue + cashRevenue)]), [2])
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']

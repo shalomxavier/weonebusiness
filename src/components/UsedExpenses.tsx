@@ -359,6 +359,7 @@ export default function UsedExpenses() {
     pickupSnap.forEach(docSnap => {
       const p = docSnap.data() as {
         pickupDate: string
+        itemName?: string
         price: string
         paymentMethod: string
         bankAmount?: string
@@ -370,7 +371,7 @@ export default function UsedExpenses() {
       if (pickupDate < fromDate || pickupDate > toDate) return
       const price = parseFloat(p.price) || 0
       if (price <= 0) return
-      const label = p.additionalNotes || ''
+      const label = p.itemName || p.additionalNotes || ''
       const pm = (p.paymentMethod || '').toLowerCase()
       if (pm === 'both') {
         const bankAmt = parseFloat(p.bankAmount || '') || 0

@@ -363,6 +363,16 @@ export default function Layout() {
         ],
       },
       {
+        id: 'removals',
+        title: 'Removals',
+        icon: TruckIcon,
+        defaultOpen: false,
+        items: [
+          { id: 'removal-orders', label: 'Orders', to: '/removals/orders', icon: FileText },
+          { id: 'removal-expenses', label: 'Expenses', to: '/removals/expenses', icon: Receipt },
+        ],
+      },
+      {
         id: 'documents',
         title: 'Documents',
         icon: Files,
@@ -371,16 +381,6 @@ export default function Layout() {
           { id: 'documents-quotations', label: 'Quotations', to: '/documents/quotations', icon: FileText },
           { id: 'documents-invoices', label: 'Invoices', to: '/documents/invoices', icon: FileSpreadsheet },
           { id: 'documents-receipts', label: 'Receipts', to: '/documents/receipts', icon: Receipt },
-        ],
-      },
-      {
-        id: 'removals',
-        title: 'Removals',
-        icon: TruckIcon,
-        defaultOpen: false,
-        items: [
-          { id: 'removal-orders', label: 'Orders', to: '/removals/orders', icon: FileText },
-          { id: 'removal-expenses', label: 'Expenses', to: '/removals/expenses', icon: Receipt },
         ],
       },
       {

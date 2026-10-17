@@ -18,6 +18,8 @@ interface RemovalOrder {
   status: 'pending' | 'completed'
   type: 'removal' | 'clearance' | 'man_with_van'
   typeNote?: string
+  cardAmount?: string
+  cashAmount?: string
   attachments?: string[]
 }
 
@@ -122,6 +124,19 @@ export default function RemovalViewModal({ isOpen, onClose, order }: RemovalView
               <p className="text-sm font-medium mb-1">Payment Method</p>
               <p className="text-base capitalize">{order.paymentMethod}</p>
             </div>
+
+            {order.paymentMethod === 'both' && (
+              <>
+                <div>
+                  <p className="text-sm font-medium mb-1">Card Amount</p>
+                  <p className="text-base">£{order.cardAmount || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">Cash Amount</p>
+                  <p className="text-base">£{order.cashAmount || '—'}</p>
+                </div>
+              </>
+            )}
 
             {order.notes && (
               <div className="md:col-span-2">

@@ -313,7 +313,6 @@ export default function UsedOrders() {
     // Calculate totals for the selected month
     const monthlyTotal = monthOrders.reduce((sum, order) => sum + (parseFloat(order.price) || 0), 0)
     const monthlyAdvance = monthAdvances.reduce((sum, order) => sum + (parseFloat(order.advance) || 0), 0)
-    const monthlyBalance = monthOrders.reduce((sum, order) => sum + Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0)), 0)
     const HEADER_BG = 'FF6A1B9A'
     const HEADER_FG = 'FFFFFFFF'
     const TOTAL_BG = 'FFE8D5F5'
@@ -415,13 +414,13 @@ export default function UsedOrders() {
     const cardRevenue = cardRows.reduce((sum, r) => sum + r.amount, 0)
     const cashRevenue = cashRows.reduce((sum, r) => sum + r.amount, 0)
 
-    const buildOrderSheet = (ws: ExcelJS.Worksheet, data: Order[], priceTotal: number, balanceTotal: number) => {
+    const buildOrderSheet = (ws: ExcelJS.Worksheet, data: Order[], priceTotal: number, advanceTotal: number) => {
       const columns = [
         { width: 6 }, { width: 14 }, { width: 22 }, { width: 12 }, { width: 12 },
         { width: 22 }, { width: 14 }, { width: 30 }, { width: 12 }, { width: 14 },
         { width: 16 }, { width: 14 }, { width: 12 }, { width: 30 },
       ]
-      const headers = ['No.', 'Item Number', 'Item Name', 'Price', 'Balance', 'Customer Name', 'Phone', 'Address', 'Postcode', 'Delivery Date', 'Delivery Time', 'Payment Method', 'Status', 'Notes']
+      const headers = ['No.', 'Item Number', 'Item Name', 'Price', 'Advance', 'Customer Name', 'Phone', 'Address', 'Postcode', 'Delivery Date', 'Delivery Time', 'Payment Method', 'Status', 'Notes']
       ws.columns = columns
 
       const orderAlign = (col: number): ExcelJS.Alignment['horizontal'] => {
@@ -437,7 +436,7 @@ export default function UsedOrders() {
           order.itemNumber,
           order.itemName,
           gbp(parseFloat(order.price) || 0),
-          gbp(Math.max(0, (parseFloat(order.price) || 0) - (parseFloat(order.advance) || 0))),
+          gbp(parseFloat(order.advance) || 0),
           order.customerName,
           order.phone,
           order.address,
@@ -450,7 +449,7 @@ export default function UsedOrders() {
         ])
         styleData(row, i % 2 === 1, orderAlign)
       })
-      styleTotal(ws.addRow(['', 'TOTAL', '', gbp(priceTotal), gbp(balanceTotal), '', '', '', '', '', '', '', '', '', '']), [4, 5])
+      styleTotal(ws.addRow(['', 'TOTAL', '', gbp(priceTotal), gbp(advanceTotal), '', '', '', '', '', '', '', '', '', '']), [4, 5])
     }
 
     const buildPaymentSheet = (ws: ExcelJS.Worksheet, rows: PaymentRow[], revenueTotal: number) => {
@@ -472,7 +471,7 @@ export default function UsedOrders() {
 
     // Orders sheet
     const wsOrders = wb.addWorksheet('Orders')
-    buildOrderSheet(wsOrders, monthOrders, monthlyTotal, monthlyBalance)
+    buildOrderSheet(wsOrders, monthOrders, monthlyTotal, monthlyAdvance)
 
     // Card Payments sheet
     const wsCard = wb.addWorksheet('Card Payments')
@@ -517,10 +516,10 @@ export default function UsedOrders() {
     ;([
       ['Card Revenue', gbp(cardRevenue)],
       ['Cash Revenue', gbp(cashRevenue)],
-      ['Total Payment Revenue', gbp(cardRevenue + cashRevenue)],
     ] as [string, string][]).forEach((r, i) => {
       styleData(wsSummary.addRow(r), i % 2 === 1, sumAlign)
     })
+    styleTotal(wsSummary.addRow(['Total', gbp(cardRevenue + cashRevenue)]), [2])
 
     // Generate filename with month and year
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
