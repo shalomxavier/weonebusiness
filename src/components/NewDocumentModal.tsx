@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { FormEvent } from 'react'
+import { INVOICE_CATEGORY_LABELS, InvoiceCategory } from './InvoiceCategoryModal'
 
 export type DocumentType = 'quotation' | 'invoice' | 'receipt'
 
@@ -13,9 +14,10 @@ interface NewDocumentModalProps {
   isOpen: boolean
   onClose: () => void
   docType: DocumentType
+  category?: InvoiceCategory | null
 }
 
-export default function NewDocumentModal({ isOpen, onClose, docType }: NewDocumentModalProps) {
+export default function NewDocumentModal({ isOpen, onClose, docType, category }: NewDocumentModalProps) {
   if (!isOpen) return null
 
   const label = DOCUMENT_LABELS[docType]
@@ -41,6 +43,14 @@ export default function NewDocumentModal({ isOpen, onClose, docType }: NewDocume
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {category && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Category</label>
+              <div className="w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300">
+                {INVOICE_CATEGORY_LABELS[category]}
+              </div>
+            </div>
+          )}
           <div>
             <label htmlFor="customerName" className="block text-sm font-medium mb-1">
               Customer Name
