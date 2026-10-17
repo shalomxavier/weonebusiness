@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   },
   totals: {
     width: 238,
-    paddingTop: 14,
+    paddingTop: 20,
   },
   subtotalPanel: {
     height: 85,
