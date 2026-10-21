@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { Loader2, FileText, Eye, Pencil, Printer } from 'lucide-react'
-import NewDocumentModal, { DOCUMENT_LABELS, DocumentType } from './NewDocumentModal'
+import NewDocumentModal, { DOCUMENT_LABELS, DocumentType, RemovalsQuotationRecord } from './NewDocumentModal'
 import InvoiceCategoryModal, { InvoiceCategory } from './InvoiceCategoryModal'
+import QuotationTypeModal, { QuotationType } from './QuotationTypeModal'
 import UsedGoodsInvoiceModal from './UsedGoodsInvoiceModal'
 import UsedGoodsInvoicePreview, { InvoiceDocument } from './UsedGoodsInvoicePreview'
 import { downloadUsedGoodsInvoicePdf } from '../lib/invoicePdf'
@@ -12,7 +13,7 @@ interface DocumentsPageProps {
   docType: DocumentType
 }
 
-interface BusinessDoc extends InvoiceDocument {
+interface BusinessDoc extends InvoiceDocument, RemovalsQuotationRecord {
   status?: string
   sourceInvoiceId?: string
 }
@@ -34,13 +35,16 @@ const STATUS_COLORS: Record<string, string> = {
 export default function DocumentsPage({ docType }: DocumentsPageProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+  const [isQuotationTypeModalOpen, setIsQuotationTypeModalOpen] = useState(false)
   const [isUGInvoiceModalOpen, setIsUGInvoiceModalOpen] = useState(false)
   const [invoiceCategory, setInvoiceCategory] = useState<InvoiceCategory | null>(null)
+  const [quotationType, setQuotationType] = useState<QuotationType | null>(null)
   const [documents, setDocuments] = useState<BusinessDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [previewInvoice, setPreviewInvoice] = useState<BusinessDoc | null>(null)
   const [editingInvoice, setEditingInvoice] = useState<BusinessDoc | null>(null)
+  const [editingQuotation, setEditingQuotation] = useState<BusinessDoc | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const label = DOCUMENT_LABELS[docType]
@@ -57,15 +61,29 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
           return {
             id: d.id,
             ...data,
-            invoiceNumber: typeof data.invoiceNumber === 'string' ? data.invoiceNumber : undefined,
+            quoteNumber: typeof data.quoteNumber === 'string' ? data.quoteNumber : undefined,
+            invoiceNumber: typeof data.invoiceNumber === 'string'
+              ? data.invoiceNumber
+              : typeof data.quoteNumber === 'string'
+                ? data.quoteNumber
+                : undefined,
             itemNumber: typeof data.itemNumber === 'string' ? data.itemNumber : undefined,
             itemName: typeof data.itemName === 'string' ? data.itemName : undefined,
             customerName: typeof data.customerName === 'string' ? data.customerName : undefined,
             phone: typeof data.phone === 'string' ? data.phone : undefined,
+            email: typeof data.email === 'string' ? data.email : undefined,
             address: typeof data.address === 'string' ? data.address : undefined,
             postcode: typeof data.postcode === 'string' ? data.postcode : undefined,
-            price: typeof data.price === 'string' ? data.price : undefined,
-            deliveryDate: typeof data.deliveryDate === 'string' ? data.deliveryDate : undefined,
+            price: typeof data.price === 'string'
+              ? data.price
+              : typeof data.totalMovingPrice === 'string'
+                ? data.totalMovingPrice
+                : undefined,
+            deliveryDate: typeof data.deliveryDate === 'string'
+              ? data.deliveryDate
+              : typeof data.movingDate === 'string'
+                ? data.movingDate
+                : undefined,
             bankDetails: typeof data.bankDetails === 'string' ? data.bankDetails : undefined,
             sourceInvoiceId: typeof data.sourceInvoiceId === 'string' ? data.sourceInvoiceId : undefined,
           } as BusinessDoc
@@ -95,6 +113,8 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
   const handleNewClick = () => {
     if (docType === 'invoice') {
       setIsCategoryModalOpen(true)
+    } else if (docType === 'quotation') {
+      setIsQuotationTypeModalOpen(true)
     } else {
       setIsCreateModalOpen(true)
     }
@@ -111,11 +131,33 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
     }
   }
 
+  const handleQuotationTypeContinue = (type: QuotationType) => {
+    setEditingQuotation(null)
+    setQuotationType(type)
+    setIsQuotationTypeModalOpen(false)
+    setIsCreateModalOpen(true)
+  }
+
+  const handleQuotationTypeClose = () => {
+    setIsQuotationTypeModalOpen(false)
+    setQuotationType(null)
+  }
+
   const handleCreateModalClose = () => {
     setIsCreateModalOpen(false)
     setIsUGInvoiceModalOpen(false)
     setEditingInvoice(null)
+    setEditingQuotation(null)
     setInvoiceCategory(null)
+    setQuotationType(null)
+  }
+
+  const handleEditQuotation = (quotation: BusinessDoc) => {
+    if (quotation.docType !== 'removals_quotation' || quotation.status !== 'draft') return
+    setActionError(null)
+    setEditingQuotation(quotation)
+    setQuotationType('removals')
+    setIsCreateModalOpen(true)
   }
 
   const handleEdit = (invoice: BusinessDoc) => {
@@ -257,9 +299,22 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
                           </button>
                         </div>
                       ) : (
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-medium capitalize ${STATUS_COLORS[doc.status ?? ''] ?? 'text-gray-400 bg-gray-400/10'}`}>
-                          {doc.status || '—'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-lg text-xs font-medium capitalize ${STATUS_COLORS[doc.status ?? ''] ?? 'text-gray-400 bg-gray-400/10'}`}>
+                            {doc.status || '—'}
+                          </span>
+                          {docType === 'quotation' && doc.docType === 'removals_quotation' && doc.status === 'draft' && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditQuotation(doc)}
+                              className="p-1.5 rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                              title="Edit draft quotation"
+                              aria-label={`Edit quotation ${doc.quoteNumber || doc.invoiceNumber || ''}`}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -281,11 +336,19 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
         onClose={handleCreateModalClose}
         docType={docType}
         category={invoiceCategory}
+        quotationType={quotationType}
+        onQuotationTypeChange={setQuotationType}
+        editQuotation={editingQuotation}
       />
       <InvoiceCategoryModal
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
         onContinue={handleCategoryContinue}
+      />
+      <QuotationTypeModal
+        isOpen={isQuotationTypeModalOpen}
+        onClose={handleQuotationTypeClose}
+        onContinue={handleQuotationTypeContinue}
       />
       <UsedGoodsInvoiceModal
         isOpen={isUGInvoiceModalOpen}
