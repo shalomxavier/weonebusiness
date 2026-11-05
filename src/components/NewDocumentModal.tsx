@@ -24,10 +24,16 @@ export const REMOVALS_QUOTATION_COMPANY_DETAILS = {
   description: 'Nationwide services on house moves & house clearances',
   companyNumber: '16191726',
   wasteCarrierNumber: 'CBDU636583',
+  phone: '07777 249530 / 07946 775933',
+  website: 'www.weoneremovals.com',
+  email: 'enquiry@weoneremovals.com',
+  contactEmail: 'chris@weoneremovals.com',
+  thankYou: 'We are a fully insured, East Anglian-based removal company providing reliable local and national moving services.\nWe appreciate the opportunity to quote for your move and look forward to helping make it smooth and straightforward.',
 } as const
 
 export interface MovingFromDetails {
   address: string
+  postcode?: string
   bedrooms: string
   garage: YesNo
   garageNotes: string
@@ -41,6 +47,7 @@ export interface MovingFromDetails {
 
 export interface MovingToDetails {
   address: string
+  postcode?: string
   bedrooms: string
   garage: YesNo
   garageNotes: string
@@ -51,6 +58,14 @@ export interface MovingToDetails {
   assemblyRequired: YesNo
   assemblyNotes: string
 }
+
+export const DEFAULT_INCLUDED_SERVICES = { transportation: true, loading: true, unloading: true }
+
+export const INCLUDED_SERVICE_DETAILS = {
+  transportation: { label: 'Transportation', description: 'Transport of household belongings between both addresses.' },
+  loading: { label: 'Loading', description: 'Professional loading of your household belongings.' },
+  unloading: { label: 'Unloading', description: 'Unloading belongings at the destination property.' },
+} as const
 
 export interface RemovalsQuotationRecord {
   id: string
@@ -73,6 +88,7 @@ export interface RemovalsQuotationRecord {
   packingDescription?: string
   packingNotes?: string
   additionalNotes?: string
+  includedServices?: Partial<typeof DEFAULT_INCLUDED_SERVICES>
   createdAt?: Timestamp | null
 }
 
@@ -417,6 +433,7 @@ function FeatureRow({
 
 const emptyMovingFrom = (): MovingFromDetails => ({
   address: '',
+  postcode: '',
   bedrooms: '',
   garage: 'no',
   garageNotes: '',
@@ -430,6 +447,7 @@ const emptyMovingFrom = (): MovingFromDetails => ({
 
 const emptyMovingTo = (): MovingToDetails => ({
   address: '',
+  postcode: '',
   bedrooms: '',
   garage: 'no',
   garageNotes: '',
@@ -464,11 +482,11 @@ async function generateNextQuoteNumber(excludeId?: string): Promise<string> {
   })
 
   for (let next = Math.max(1, maxNumber + 1); next <= 999999; next++) {
-    const candidate = next.toString().padStart(3, '0')
+    const candidate = `REM-QUO-${next.toString().padStart(3, '0')}`
     if (!existing.has(candidate)) return candidate
   }
 
-  return `${Date.now()}`.slice(-6)
+  throw new Error('Quotation number sequence is exhausted.')
 }
 
 export default function NewDocumentModal({
@@ -499,6 +517,7 @@ export default function NewDocumentModal({
   const [packingDescription, setPackingDescription] = useState(DEFAULT_PACKING_DESCRIPTION)
   const [packingNotes, setPackingNotes] = useState('')
   const [additionalNotes, setAdditionalNotes] = useState('')
+  const [includedServices, setIncludedServices] = useState({ ...DEFAULT_INCLUDED_SERVICES })
   const [savingMode, setSavingMode] = useState<'draft' | 'issued' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -522,6 +541,7 @@ export default function NewDocumentModal({
     setPackingDescription(DEFAULT_PACKING_DESCRIPTION)
     setPackingNotes('')
     setAdditionalNotes('')
+    setIncludedServices({ ...DEFAULT_INCLUDED_SERVICES })
     setSavingMode(null)
     setError(null)
   }
@@ -548,6 +568,7 @@ export default function NewDocumentModal({
       setPackingDescription(editQuotation.packingDescription ?? DEFAULT_PACKING_DESCRIPTION)
       setPackingNotes(editQuotation.packingNotes || '')
       setAdditionalNotes(editQuotation.additionalNotes || '')
+      setIncludedServices({ ...DEFAULT_INCLUDED_SERVICES, ...editQuotation.includedServices })
       if (!editQuotation.quoteNumber) {
         setQuoteNumberLoading(true)
         generateNextQuoteNumber(editQuotation.id)
@@ -657,7 +678,8 @@ export default function NewDocumentModal({
       )
       const duplicateExists = dupSnap.docs.some((d) => d.id !== editQuotation?.id)
       if (duplicateExists) {
-        setError(`Quote number "${preservedQuoteNumber}" is already in use. Enter a different quote number.`)
+        setQuoteNumber(await generateNextQuoteNumber(editQuotation?.id))
+        setError(`Quote number "${preservedQuoteNumber}" is already in use. A new number has been generated. Please save again.`)
         setSavingMode(null)
         return
       }
@@ -682,6 +704,7 @@ export default function NewDocumentModal({
         address: movingFrom.address.trim(),
         movingFrom: {
           address: movingFrom.address.trim(),
+          postcode: movingFrom.postcode?.trim() || '',
           bedrooms: movingFrom.bedrooms.trim(),
           garage: movingFrom.garage,
           garageNotes: movingFrom.garageNotes.trim(),
@@ -694,6 +717,7 @@ export default function NewDocumentModal({
         },
         movingTo: {
           address: movingTo.address.trim(),
+          postcode: movingTo.postcode?.trim() || '',
           bedrooms: movingTo.bedrooms.trim(),
           garage: movingTo.garage,
           garageNotes: movingTo.garageNotes.trim(),
@@ -712,6 +736,7 @@ export default function NewDocumentModal({
         packingDescription: packingDescription.trim() || DEFAULT_PACKING_DESCRIPTION,
         packingNotes: packingNotes.trim(),
         additionalNotes: additionalNotes.trim(),
+        includedServices,
         companyDetails: REMOVALS_QUOTATION_COMPANY_DETAILS,
         itemName: 'Removals',
         price: totalMovingPrice.trim() || packingCostNum > 0 ? combinedPrice : '',
@@ -808,9 +833,10 @@ export default function NewDocumentModal({
                     name="quoteNumber"
                     type="text"
                     value={quoteNumber}
-                    onChange={(e) => setQuoteNumber(e.target.value)}
+                    readOnly
+                    aria-readonly="true"
                     disabled={isBusy || quoteNumberLoading}
-                    className={inputClass}
+                    className={`${inputClass} cursor-default text-gray-400`}
                   />
                 </div>
                 <div>
@@ -887,6 +913,8 @@ export default function NewDocumentModal({
                     onChange={(e) => setMovingFrom((p) => ({ ...p, address: e.target.value }))}
                     className={`${inputClass} resize-none`}
                   />
+                  <label htmlFor="movingFromPostcode" className="block text-sm font-medium mt-3 mb-1">Collection Postcode</label>
+                  <input id="movingFromPostcode" type="text" value={movingFrom.postcode || ''} disabled={isBusy} onChange={(e) => setMovingFrom((p) => ({ ...p, postcode: e.target.value }))} className={inputClass} />
                 </div>
                 <div>
                   <label htmlFor="movingFromBedrooms" className="block text-sm font-medium mb-1">
@@ -964,6 +992,8 @@ export default function NewDocumentModal({
                     onChange={(e) => setMovingTo((p) => ({ ...p, address: e.target.value }))}
                     className={`${inputClass} resize-none`}
                   />
+                  <label htmlFor="movingToPostcode" className="block text-sm font-medium mt-3 mb-1">Delivery Postcode</label>
+                  <input id="movingToPostcode" type="text" value={movingTo.postcode || ''} disabled={isBusy} onChange={(e) => setMovingTo((p) => ({ ...p, postcode: e.target.value }))} className={inputClass} />
                 </div>
                 <div>
                   <label htmlFor="movingToBedrooms" className="block text-sm font-medium mb-1">
@@ -1022,6 +1052,18 @@ export default function NewDocumentModal({
                 />
               </div>
             </div>
+
+            <fieldset disabled={isBusy} className="space-y-4">
+              <legend className="text-lg font-semibold text-white border-b border-white/10 pb-2 w-full">What's Included</legend>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {(Object.keys(INCLUDED_SERVICE_DETAILS) as (keyof typeof INCLUDED_SERVICE_DETAILS)[]).map((key) => (
+                  <label key={key} className="rounded-2xl border border-white/10 bg-black/20 p-4 flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={includedServices[key]} onChange={(e) => setIncludedServices((current) => ({ ...current, [key]: e.target.checked }))} className="mt-1 accent-purple-600" />
+                    <span><span className="block font-medium">{INCLUDED_SERVICE_DETAILS[key].label}</span><span className="block text-xs text-gray-400 mt-1">{INCLUDED_SERVICE_DETAILS[key].description}</span></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             {/* 4. Moving and packing costs */}
             <div className="space-y-4">
@@ -1114,6 +1156,15 @@ export default function NewDocumentModal({
                   className={`${inputClass} resize-none`}
                 />
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 flex items-center justify-between gap-4">
+              <span className="font-semibold text-white">Total Quote Amount</span>
+              <output className="text-xl font-semibold text-white">
+                {isNonNegativeAmount(totalMovingPrice) && (packingRequired !== 'yes' || isNonNegativeAmount(totalPackingCost))
+                  ? (Number(totalMovingPrice) + (packingRequired === 'yes' ? Number(totalPackingCost) : 0)).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' })
+                  : '—'}
+              </output>
             </div>
 
             {/* 5. Additional information */}

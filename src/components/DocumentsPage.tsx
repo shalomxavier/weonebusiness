@@ -6,7 +6,10 @@ import NewDocumentModal, { DOCUMENT_LABELS, DocumentType, RemovalsQuotationRecor
 import InvoiceCategoryModal, { InvoiceCategory } from './InvoiceCategoryModal'
 import QuotationTypeModal, { QuotationType } from './QuotationTypeModal'
 import UsedGoodsInvoiceModal from './UsedGoodsInvoiceModal'
-import UsedGoodsInvoicePreview, { InvoiceDocument } from './UsedGoodsInvoicePreview'
+import DocumentPdfPreview from './DocumentPdfPreview'
+import { InvoiceDocument, UsedGoodsInvoicePdfDocument } from './UsedGoodsInvoicePdf'
+import { RemovalsQuotationPdfDocument } from './RemovalsQuotationPdf'
+import { downloadRemovalsQuotationPdf } from '../lib/quotationPdf'
 import { downloadUsedGoodsInvoicePdf } from '../lib/invoicePdf'
 
 interface DocumentsPageProps {
@@ -42,7 +45,7 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
   const [documents, setDocuments] = useState<BusinessDoc[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [previewInvoice, setPreviewInvoice] = useState<BusinessDoc | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<BusinessDoc | null>(null)
   const [editingInvoice, setEditingInvoice] = useState<BusinessDoc | null>(null)
   const [editingQuotation, setEditingQuotation] = useState<BusinessDoc | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
@@ -100,14 +103,6 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
 
   const sortedDocuments = useMemo(() => {
     return [...documents].sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
-  }, [documents])
-
-  const invoiceCountByItem = useMemo(() => {
-    return documents.reduce<Record<string, number>>((counts, document) => {
-      const itemNumber = document.itemNumber?.trim().toUpperCase()
-      if (itemNumber) counts[itemNumber] = (counts[itemNumber] || 0) + 1
-      return counts
-    }, {})
   }, [documents])
 
   const handleNewClick = () => {
@@ -172,9 +167,13 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
     setDownloadingId(invoice.id)
     setActionError(null)
     try {
-      await downloadUsedGoodsInvoicePdf(invoice)
+      if (invoice.docType === 'removals_quotation') {
+        await downloadRemovalsQuotationPdf(invoice)
+      } else {
+        await downloadUsedGoodsInvoicePdf(invoice)
+      }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to generate the invoice PDF.')
+      setActionError(err instanceof Error ? err.message : 'Failed to generate the document PDF.')
     } finally {
       setDownloadingId(null)
     }
@@ -231,7 +230,6 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
               <thead>
                 <tr>
                   <th className="text-left px-4 py-3 text-base font-semibold">{label} Number</th>
-                  <th className="text-left px-4 py-3 text-base font-semibold">Item Number</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Item Name</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Customer</th>
                   <th className="text-left px-4 py-3 text-base font-semibold">Price</th>
@@ -250,14 +248,6 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-base">
-                      <div>{doc.itemNumber || '—'}</div>
-                      {(invoiceCountByItem[doc.itemNumber?.trim().toUpperCase() || ''] || 0) > 1 && (
-                        <div className="mt-0.5 text-xs text-gray-500">
-                          {invoiceCountByItem[doc.itemNumber?.trim().toUpperCase() || '']} invoices
-                        </div>
-                      )}
-                    </td>
                     <td className="px-4 py-3 text-base">{doc.itemName || '—'}</td>
                     <td className="px-4 py-3 text-base">{doc.customerName || '—'}</td>
                     <td className="px-4 py-3 text-base">{formatPrice(doc.price)}</td>
@@ -267,7 +257,7 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => { setActionError(null); setPreviewInvoice(doc) }}
+                            onClick={() => { setActionError(null); setPreviewDoc(doc) }}
                             className="p-1.5 rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
                             title="Preview invoice"
                             aria-label={`Preview invoice ${doc.invoiceNumber || ''}`}
@@ -303,6 +293,17 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
                           <span className={`px-2 py-0.5 rounded-lg text-xs font-medium capitalize ${STATUS_COLORS[doc.status ?? ''] ?? 'text-gray-400 bg-gray-400/10'}`}>
                             {doc.status || '—'}
                           </span>
+                          {docType === 'quotation' && doc.docType === 'removals_quotation' && (
+                            <button
+                              type="button"
+                              onClick={() => { setActionError(null); setPreviewDoc(doc) }}
+                              className="p-1.5 rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                              title="Preview quotation"
+                              aria-label={`Preview quotation ${doc.quoteNumber || doc.invoiceNumber || ''}`}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
                           {docType === 'quotation' && doc.docType === 'removals_quotation' && doc.status === 'draft' && (
                             <button
                               type="button"
@@ -312,6 +313,20 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
                               aria-label={`Edit quotation ${doc.quoteNumber || doc.invoiceNumber || ''}`}
                             >
                               <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {docType === 'quotation' && doc.docType === 'removals_quotation' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(doc)}
+                              disabled={downloadingId !== null}
+                              className="p-1.5 rounded-lg text-gray-400 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                              title="Download quotation PDF"
+                              aria-label={`Download quotation ${doc.quoteNumber || doc.invoiceNumber || ''} as PDF`}
+                            >
+                              {downloadingId === doc.id
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Printer className="w-4 h-4" />}
                             </button>
                           )}
                         </div>
@@ -355,9 +370,16 @@ export default function DocumentsPage({ docType }: DocumentsPageProps) {
         onClose={handleCreateModalClose}
         editInvoice={editingInvoice}
       />
-      <UsedGoodsInvoicePreview
-        invoice={previewInvoice}
-        onClose={() => setPreviewInvoice(null)}
+      <DocumentPdfPreview
+        key={previewDoc?.id || 'closed'}
+        document={previewDoc
+          ? previewDoc.docType === 'removals_quotation'
+            ? <RemovalsQuotationPdfDocument quotation={previewDoc} />
+            : <UsedGoodsInvoicePdfDocument invoice={previewDoc} />
+          : null}
+        heading={previewDoc?.docType === 'removals_quotation' ? 'Quotation preview' : 'Invoice preview'}
+        title={previewDoc?.quoteNumber || previewDoc?.invoiceNumber || 'Untitled document'}
+        onClose={() => setPreviewDoc(null)}
       />
     </section>
   )
