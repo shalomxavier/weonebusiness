@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Loader2, Plus, X } from 'lucide-react'
 import { FormEvent, useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { addDoc, collection, doc, getDocs, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore'
@@ -10,6 +10,7 @@ import { QUOTATION_TYPE_LABELS, QuotationType } from './QuotationTypeModal'
 export type DocumentType = 'quotation' | 'invoice' | 'receipt'
 export type YesNo = 'yes' | 'no'
 export type PackingDay = 'same_day' | 'different_date'
+export type PropertyType = 'house' | 'flat'
 
 export const DOCUMENT_LABELS: Record<DocumentType, string> = {
   quotation: 'Quotation',
@@ -31,10 +32,23 @@ export const REMOVALS_QUOTATION_COMPANY_DETAILS = {
   thankYou: 'We are a fully insured, East Anglian-based removal company providing reliable local and national moving services.\nWe appreciate the opportunity to quote for your move and look forward to helping make it smooth and straightforward.',
 } as const
 
+export interface CustomNote {
+  title: string
+  note: string
+}
+
 export interface MovingFromDetails {
   address: string
   postcode?: string
   bedrooms: string
+  propertyType?: PropertyType
+  storeys: string
+  floor: string
+  lift: YesNo
+  upstairsBedroomNotes: string[]
+  downstairsBedroomNotes: string[]
+  upstairsBathroomNotes: string[]
+  downstairsBathroomNotes: string[]
   garage: YesNo
   garageNotes: string
   gardenShed: YesNo
@@ -43,12 +57,27 @@ export interface MovingFromDetails {
   gardenFurnitureNotes: string
   dismantlingRequired: YesNo
   dismantlingNotes: string
+  upstairsHallway: YesNo
+  upstairsHallwayNotes: string
+  downstairsHallway: YesNo
+  downstairsHallwayNotes: string
+  kitchen: YesNo
+  kitchenNotes: string
+  utilityRoom: YesNo
+  utilityRoomNotes: string
+  conservatory: YesNo
+  conservatoryNotes: string
+  customNotes: CustomNote[]
 }
 
 export interface MovingToDetails {
   address: string
   postcode?: string
   bedrooms: string
+  propertyType?: PropertyType
+  storeys: string
+  floor: string
+  lift: YesNo
   garage: YesNo
   garageNotes: string
   gardenShed: YesNo
@@ -57,14 +86,29 @@ export interface MovingToDetails {
   gardenFurnitureNotes: string
   assemblyRequired: YesNo
   assemblyNotes: string
+  customNotes: CustomNote[]
 }
 
-export const DEFAULT_INCLUDED_SERVICES = { transportation: true, loading: true, unloading: true }
+export const DEFAULT_INCLUDED_SERVICES = {
+  safeTransportation: true,
+  loadingUnloading: true,
+  equippedVans: true,
+  professionalCrew: true,
+  removalBlankets: true,
+  protectiveCovers: true,
+  shrinkWrapping: true,
+  floorProtection: true,
+}
 
 export const INCLUDED_SERVICE_DETAILS = {
-  transportation: { label: 'Transportation', description: 'Transport of household belongings between both addresses.' },
-  loading: { label: 'Loading', description: 'Professional loading of your household belongings.' },
-  unloading: { label: 'Unloading', description: 'Unloading belongings at the destination property.' },
+  safeTransportation: { label: 'Safe Transportation', description: 'Safe and secure transportation to your new property.' },
+  loadingUnloading: { label: 'Loading & Unloading', description: 'Professional loading and unloading.' },
+  equippedVans: { label: 'Equipped Vans', description: 'Fully equipped vans with all necessary tools.' },
+  professionalCrew: { label: 'Professional Crew', description: 'Professional, uniformed and DBS-checked crew members.' },
+  removalBlankets: { label: 'Removal Blankets', description: 'Protective removal blankets for all furniture during transportation.' },
+  protectiveCovers: { label: 'Protective Covers', description: 'Protective mattress and sofa covers.' },
+  shrinkWrapping: { label: 'Shrink Wrapping', description: 'Shrink wrapping of solid furniture and large appliances.' },
+  floorProtection: { label: 'Floor Protection', description: 'Protective floor wrapping to prevent scratches, scuffs and damage during the move.' },
 } as const
 
 export interface RemovalsQuotationRecord {
@@ -80,6 +124,8 @@ export interface RemovalsQuotationRecord {
   email?: string
   movingFrom?: Partial<MovingFromDetails>
   movingTo?: Partial<MovingToDetails>
+  numberOfVans?: string
+  crewMembers?: string
   totalMovingPrice?: string
   packingRequired?: YesNo
   packingDay?: PackingDay
@@ -115,6 +161,13 @@ const PACKING_DAY_OPTIONS: { value: PackingDay; label: string }[] = [
   { value: 'same_day', label: 'Same day as move' },
   { value: 'different_date', label: 'Different date' },
 ]
+
+const PROPERTY_TYPE_OPTIONS: { value: PropertyType; label: string }[] = [
+  { value: 'house', label: 'House' },
+  { value: 'flat', label: 'Flat' },
+]
+
+const REMOVAL_STEPS = ['Details', 'Moving From', 'Moving To', 'Services & Costs', 'Review'] as const
 
 const inputClass =
   'w-full px-3 py-2 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl text-gray-300 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500'
@@ -360,15 +413,17 @@ function DatePicker({
   )
 }
 
-function YesNoField({
+function RadioField<T extends string>({
   label,
   value,
+  options,
   onChange,
   disabled,
 }: {
   label: string
-  value: YesNo
-  onChange: (value: YesNo) => void
+  value: T | undefined
+  options: readonly { value: T; label: string }[]
+  onChange: (value: T) => void
   disabled?: boolean
 }) {
   const groupName = useId()
@@ -377,7 +432,7 @@ function YesNoField({
     <fieldset disabled={disabled}>
       <legend className="block text-sm font-medium mb-2">{label}</legend>
       <div className="flex items-center gap-6 py-2">
-        {YES_NO_OPTIONS.map((opt) => (
+        {options.map((opt) => (
           <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
             <input
               type="radio"
@@ -395,6 +450,20 @@ function YesNoField({
   )
 }
 
+function YesNoField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string
+  value: YesNo
+  onChange: (value: YesNo) => void
+  disabled?: boolean
+}) {
+  return <RadioField label={label} value={value} options={YES_NO_OPTIONS} onChange={onChange} disabled={disabled} />
+}
+
 function FeatureRow({
   label,
   value,
@@ -406,27 +475,149 @@ function FeatureRow({
 }: {
   label: string
   value: YesNo
-  notes: string
-  notesLabel: string
+  notes?: string
+  notesLabel?: string
   onValueChange: (value: YesNo) => void
-  onNotesChange: (notes: string) => void
+  onNotesChange?: (notes: string) => void
   disabled?: boolean
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="md:col-span-4">
+      <div className={notesLabel === undefined ? 'md:col-span-12' : 'md:col-span-4'}>
         <YesNoField label={label} value={value} onChange={onValueChange} disabled={disabled} />
       </div>
-      <div className="md:col-span-8">
-        <label className="block text-sm font-medium mb-1">{notesLabel}</label>
-        <input
-          type="text"
-          value={notes}
-          disabled={disabled}
-          onChange={(e) => onNotesChange(e.target.value)}
-          className={inputClass}
-        />
-      </div>
+      {notesLabel !== undefined && (
+        <div className="md:col-span-8">
+          <label className="block text-sm font-medium mb-1">{notesLabel}</label>
+          <textarea
+            rows={3}
+            value={notes}
+            disabled={disabled}
+            onChange={(e) => onNotesChange?.(e.target.value)}
+            className={`${inputClass} resize-none`}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NotesEditor({
+  title,
+  addLabel,
+  notes,
+  onChange,
+  disabled,
+}: {
+  title: string
+  addLabel: string
+  notes: string[]
+  onChange: (notes: string[]) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
+      <span className="block text-sm font-medium">{title}</span>
+      {notes.length === 0 && (
+        <p className="text-xs text-gray-500">No {title.toLowerCase()} notes added yet.</p>
+      )}
+      {notes.map((note, index) => (
+        <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          {notes.length > 1 && (
+            <label className="md:col-span-4 block text-sm font-medium">
+              Bedroom {index + 1} Notes
+            </label>
+          )}
+          <div className={`${notes.length > 1 ? 'md:col-span-8' : 'md:col-span-12'} flex items-center gap-2`}>
+            <textarea
+              rows={3}
+              value={note}
+              disabled={disabled}
+              onChange={(e) => onChange(notes.map((n, i) => (i === index ? e.target.value : n)))}
+              className={`${inputClass} resize-none`}
+            />
+            {notes.length > 1 && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(notes.filter((_, i) => i !== index))}
+                aria-label={`Remove ${title.toLowerCase()} ${index + 1} notes`}
+                className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange([...notes, ''])}
+        className="px-3 py-1.5 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Plus className="w-4 h-4" />
+        {addLabel}
+      </button>
+    </div>
+  )
+}
+
+function CustomNotesEditor({
+  notes,
+  onChange,
+  disabled,
+}: {
+  notes: CustomNote[]
+  onChange: (notes: CustomNote[]) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 space-y-3">
+      <span className="block text-sm font-medium">Custom Notes</span>
+      {notes.length === 0 && (
+        <p className="text-xs text-gray-500">No custom notes added yet.</p>
+      )}
+      {notes.map((item, index) => (
+        <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+          <input
+            type="text"
+            value={item.title}
+            placeholder="Title"
+            disabled={disabled}
+            onChange={(e) => onChange(notes.map((n, i) => (i === index ? { ...n, title: e.target.value } : n)))}
+            className={`${inputClass} md:col-span-4`}
+          />
+          <div className="md:col-span-8 flex items-start gap-2">
+            <textarea
+              rows={3}
+              value={item.note}
+              placeholder="Notes"
+              disabled={disabled}
+              onChange={(e) => onChange(notes.map((n, i) => (i === index ? { ...n, note: e.target.value } : n)))}
+              className={`${inputClass} resize-none`}
+            />
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(notes.filter((_, i) => i !== index))}
+              aria-label={`Remove custom note ${index + 1}`}
+              className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange([...notes, { title: '', note: '' }])}
+        className="px-3 py-1.5 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Plus className="w-4 h-4" />
+        Add note
+      </button>
     </div>
   )
 }
@@ -435,6 +626,13 @@ const emptyMovingFrom = (): MovingFromDetails => ({
   address: '',
   postcode: '',
   bedrooms: '',
+  storeys: '',
+  floor: '',
+  lift: 'no',
+  upstairsBedroomNotes: [''],
+  downstairsBedroomNotes: [''],
+  upstairsBathroomNotes: [''],
+  downstairsBathroomNotes: [''],
   garage: 'no',
   garageNotes: '',
   gardenShed: 'no',
@@ -443,12 +641,26 @@ const emptyMovingFrom = (): MovingFromDetails => ({
   gardenFurnitureNotes: '',
   dismantlingRequired: 'no',
   dismantlingNotes: '',
+  upstairsHallway: 'no',
+  upstairsHallwayNotes: '',
+  downstairsHallway: 'no',
+  downstairsHallwayNotes: '',
+  kitchen: 'no',
+  kitchenNotes: '',
+  utilityRoom: 'no',
+  utilityRoomNotes: '',
+  conservatory: 'no',
+  conservatoryNotes: '',
+  customNotes: [],
 })
 
 const emptyMovingTo = (): MovingToDetails => ({
   address: '',
   postcode: '',
   bedrooms: '',
+  storeys: '',
+  floor: '',
+  lift: 'no',
   garage: 'no',
   garageNotes: '',
   gardenShed: 'no',
@@ -457,6 +669,7 @@ const emptyMovingTo = (): MovingToDetails => ({
   gardenFurnitureNotes: '',
   assemblyRequired: 'no',
   assemblyNotes: '',
+  customNotes: [],
 })
 
 async function generateNextQuoteNumber(excludeId?: string): Promise<string> {
@@ -509,6 +722,8 @@ export default function NewDocumentModal({
   const [email, setEmail] = useState('')
   const [movingFrom, setMovingFrom] = useState<MovingFromDetails>(emptyMovingFrom)
   const [movingTo, setMovingTo] = useState<MovingToDetails>(emptyMovingTo)
+  const [numberOfVans, setNumberOfVans] = useState('')
+  const [crewMembers, setCrewMembers] = useState('')
   const [totalMovingPrice, setTotalMovingPrice] = useState('')
   const [packingRequired, setPackingRequired] = useState<YesNo>('no')
   const [packingDay, setPackingDay] = useState<PackingDay>('same_day')
@@ -520,6 +735,7 @@ export default function NewDocumentModal({
   const [includedServices, setIncludedServices] = useState({ ...DEFAULT_INCLUDED_SERVICES })
   const [savingMode, setSavingMode] = useState<'draft' | 'issued' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [step, setStep] = useState(0)
 
   const activeQuotationType = editQuotation ? 'removals' : quotationType
   const isRemovalsQuotation = docType === 'quotation' && activeQuotationType === 'removals'
@@ -533,6 +749,8 @@ export default function NewDocumentModal({
     setEmail('')
     setMovingFrom(emptyMovingFrom())
     setMovingTo(emptyMovingTo())
+    setNumberOfVans('')
+    setCrewMembers('')
     setTotalMovingPrice('')
     setPackingRequired('no')
     setPackingDay('same_day')
@@ -544,12 +762,14 @@ export default function NewDocumentModal({
     setIncludedServices({ ...DEFAULT_INCLUDED_SERVICES })
     setSavingMode(null)
     setError(null)
+    setStep(0)
   }
 
   useEffect(() => {
     if (!isOpen) return
     setError(null)
     setSavingMode(null)
+    setStep(0)
 
     if (editQuotation) {
       setQuoteNumber(editQuotation.quoteNumber || '')
@@ -558,8 +778,15 @@ export default function NewDocumentModal({
       setCustomerName(editQuotation.customerName || '')
       setPhone(editQuotation.phone || '')
       setEmail(editQuotation.email || '')
-      setMovingFrom({ ...emptyMovingFrom(), ...(editQuotation.movingFrom || {}) })
+      const loadedMovingFrom = { ...emptyMovingFrom(), ...(editQuotation.movingFrom || {}) }
+      if (!loadedMovingFrom.upstairsBedroomNotes?.length) loadedMovingFrom.upstairsBedroomNotes = ['']
+      if (!loadedMovingFrom.downstairsBedroomNotes?.length) loadedMovingFrom.downstairsBedroomNotes = ['']
+      if (!loadedMovingFrom.upstairsBathroomNotes?.length) loadedMovingFrom.upstairsBathroomNotes = ['']
+      if (!loadedMovingFrom.downstairsBathroomNotes?.length) loadedMovingFrom.downstairsBathroomNotes = ['']
+      setMovingFrom(loadedMovingFrom)
       setMovingTo({ ...emptyMovingTo(), ...(editQuotation.movingTo || {}) })
+      setNumberOfVans(editQuotation.numberOfVans ?? '')
+      setCrewMembers(editQuotation.crewMembers ?? '')
       setTotalMovingPrice(editQuotation.totalMovingPrice ?? '')
       setPackingRequired(editQuotation.packingRequired === 'yes' ? 'yes' : 'no')
       setPackingDay(editQuotation.packingDay === 'different_date' ? 'different_date' : 'same_day')
@@ -647,9 +874,9 @@ export default function NewDocumentModal({
       if (!movingDate) return 'Moving Date is required before issuing the quotation.'
       if (!phone.trim()) return 'Phone is required before issuing the quotation.'
       if (!email.trim()) return 'Email is required before issuing the quotation.'
-      if (!movingFrom.address.trim()) return 'Moving From Address is required before issuing the quotation.'
+      if (!movingFrom.address.trim()) return 'Moving From is required before issuing the quotation.'
       if (movingFrom.bedrooms.trim() === '') return 'Moving From Number of Bedrooms is required before issuing the quotation.'
-      if (!movingTo.address.trim()) return 'Moving To Address is required before issuing the quotation.'
+      if (!movingTo.address.trim()) return 'Moving To is required before issuing the quotation.'
       if (movingTo.bedrooms.trim() === '') return 'Moving To Number of Bedrooms is required before issuing the quotation.'
       if (!isNonNegativeAmount(totalMovingPrice)) return 'Total Moving Price is required before issuing the quotation.'
       if (packingRequired === 'yes' && !isNonNegativeAmount(totalPackingCost)) {
@@ -706,6 +933,14 @@ export default function NewDocumentModal({
           address: movingFrom.address.trim(),
           postcode: movingFrom.postcode?.trim() || '',
           bedrooms: movingFrom.bedrooms.trim(),
+          propertyType: movingFrom.propertyType || '',
+          storeys: movingFrom.propertyType === 'house' ? movingFrom.storeys.trim() : '',
+          floor: movingFrom.propertyType === 'flat' ? movingFrom.floor.trim() : '',
+          lift: movingFrom.propertyType === 'flat' ? movingFrom.lift : 'no',
+          upstairsBedroomNotes: movingFrom.upstairsBedroomNotes.map((note) => note.trim()).filter(Boolean),
+          downstairsBedroomNotes: movingFrom.downstairsBedroomNotes.map((note) => note.trim()).filter(Boolean),
+          upstairsBathroomNotes: movingFrom.upstairsBathroomNotes.map((note) => note.trim()).filter(Boolean),
+          downstairsBathroomNotes: movingFrom.downstairsBathroomNotes.map((note) => note.trim()).filter(Boolean),
           garage: movingFrom.garage,
           garageNotes: movingFrom.garageNotes.trim(),
           gardenShed: movingFrom.gardenShed,
@@ -714,11 +949,28 @@ export default function NewDocumentModal({
           gardenFurnitureNotes: movingFrom.gardenFurnitureNotes.trim(),
           dismantlingRequired: movingFrom.dismantlingRequired,
           dismantlingNotes: movingFrom.dismantlingNotes.trim(),
+          upstairsHallway: movingFrom.upstairsHallway,
+          upstairsHallwayNotes: movingFrom.upstairsHallwayNotes.trim(),
+          downstairsHallway: movingFrom.downstairsHallway,
+          downstairsHallwayNotes: movingFrom.downstairsHallwayNotes.trim(),
+          kitchen: movingFrom.kitchen,
+          kitchenNotes: movingFrom.kitchenNotes.trim(),
+          utilityRoom: movingFrom.utilityRoom,
+          utilityRoomNotes: movingFrom.utilityRoomNotes.trim(),
+          conservatory: movingFrom.conservatory,
+          conservatoryNotes: movingFrom.conservatoryNotes.trim(),
+          customNotes: movingFrom.customNotes
+            .map((item) => ({ title: item.title.trim(), note: item.note.trim() }))
+            .filter((item) => item.title || item.note),
         },
         movingTo: {
           address: movingTo.address.trim(),
           postcode: movingTo.postcode?.trim() || '',
           bedrooms: movingTo.bedrooms.trim(),
+          propertyType: movingTo.propertyType || '',
+          storeys: movingTo.propertyType === 'house' ? movingTo.storeys.trim() : '',
+          floor: movingTo.propertyType === 'flat' ? movingTo.floor.trim() : '',
+          lift: movingTo.propertyType === 'flat' ? movingTo.lift : 'no',
           garage: movingTo.garage,
           garageNotes: movingTo.garageNotes.trim(),
           gardenShed: movingTo.gardenShed,
@@ -727,7 +979,12 @@ export default function NewDocumentModal({
           gardenFurnitureNotes: movingTo.gardenFurnitureNotes.trim(),
           assemblyRequired: movingTo.assemblyRequired,
           assemblyNotes: movingTo.assemblyNotes.trim(),
+          customNotes: movingTo.customNotes
+            .map((item) => ({ title: item.title.trim(), note: item.note.trim() }))
+            .filter((item) => item.title || item.note),
         },
+        numberOfVans: numberOfVans.trim(),
+        crewMembers: crewMembers.trim(),
         totalMovingPrice: totalMovingPrice.trim(),
         packingRequired,
         packingDay: packingRequired === 'yes' ? packingDay : 'same_day',
@@ -795,18 +1052,37 @@ export default function NewDocumentModal({
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Documents</p>
               <h2 className="text-2xl font-semibold">{editQuotation ? 'Edit Removals Quotation' : 'New Removals Quotation'}</h2>
             </div>
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={onClose}
-              className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-300 disabled:opacity-50"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                {REMOVAL_STEPS.map((label, index) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setStep(index)}
+                    aria-label={label}
+                    className={`h-3 rounded-full transition-all ${index === step ? 'w-8 bg-purple-500' : 'w-3 bg-white/20 hover:bg-white/40'}`}
+                  />
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={onClose}
+                className="p-2 rounded-2xl hover:bg-white/10 transition-colors text-gray-300 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
-            {!editQuotation && activeQuotationType && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-400">
+                Step {step + 1} of {REMOVAL_STEPS.length}
+              </span>
+            </div>
+
+            {(step === 0 || step === 4) && !editQuotation && activeQuotationType && (
               <div>
                 <label className="block text-sm font-medium mb-1">Quotation Type</label>
                 <CustomSelect
@@ -819,6 +1095,7 @@ export default function NewDocumentModal({
             )}
 
             {/* 1. Customer and quotation details */}
+            {(step === 0 || step === 4) && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-white border-b border-white/10 pb-2">
                 Customer &amp; Quotation Details
@@ -894,16 +1171,53 @@ export default function NewDocumentModal({
                 </div>
               </div>
             </div>
+            )}
 
             {/* 2. Moving From */}
+            {(step === 1 || step === 4) && (
             <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label htmlFor="numberOfVans" className="block text-sm font-medium mb-1">
+                    Number of Vans
+                  </label>
+                  <input
+                    id="numberOfVans"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={numberOfVans}
+                    disabled={isBusy}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    onChange={(e) => setNumberOfVans(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="crewMembers" className="block text-sm font-medium mb-1">
+                    Number of Crew Members
+                  </label>
+                  <input
+                    id="crewMembers"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={crewMembers}
+                    disabled={isBusy}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    onChange={(e) => setCrewMembers(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
               <h3 className="text-lg font-semibold text-white border-b border-white/10 pb-2">
                 Moving From
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label htmlFor="movingFromAddress" className="block text-sm font-medium mb-1">
-                    Moving From Address
+                    Moving From
                   </label>
                   <textarea
                     id="movingFromAddress"
@@ -913,8 +1227,6 @@ export default function NewDocumentModal({
                     onChange={(e) => setMovingFrom((p) => ({ ...p, address: e.target.value }))}
                     className={`${inputClass} resize-none`}
                   />
-                  <label htmlFor="movingFromPostcode" className="block text-sm font-medium mt-3 mb-1">Collection Postcode</label>
-                  <input id="movingFromPostcode" type="text" value={movingFrom.postcode || ''} disabled={isBusy} onChange={(e) => setMovingFrom((p) => ({ ...p, postcode: e.target.value }))} className={inputClass} />
                 </div>
                 <div>
                   <label htmlFor="movingFromBedrooms" className="block text-sm font-medium mb-1">
@@ -934,7 +1246,138 @@ export default function NewDocumentModal({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <RadioField
+                  label="Property Type"
+                  value={movingFrom.propertyType}
+                  options={PROPERTY_TYPE_OPTIONS}
+                  disabled={isBusy}
+                  onChange={(v) => setMovingFrom((p) => ({ ...p, propertyType: v }))}
+                />
+                {movingFrom.propertyType === 'house' && (
+                  <div>
+                    <label htmlFor="movingFromStoreys" className="block text-sm font-medium mb-1">
+                      Number of Storeys
+                    </label>
+                    <input
+                      id="movingFromStoreys"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={movingFrom.storeys}
+                      disabled={isBusy}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      onChange={(e) => setMovingFrom((p) => ({ ...p, storeys: e.target.value }))}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+                {movingFrom.propertyType === 'flat' && (
+                  <>
+                    <div>
+                      <label htmlFor="movingFromFloor" className="block text-sm font-medium mb-1">
+                        Which Floor
+                      </label>
+                      <input
+                        id="movingFromFloor"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={movingFrom.floor}
+                        disabled={isBusy}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        onChange={(e) => setMovingFrom((p) => ({ ...p, floor: e.target.value }))}
+                        className={inputClass}
+                      />
+                    </div>
+                    <YesNoField
+                      label="Lift"
+                      value={movingFrom.lift}
+                      disabled={isBusy}
+                      onChange={(v) => setMovingFrom((p) => ({ ...p, lift: v }))}
+                    />
+                  </>
+                )}
+              </div>
+
+              <NotesEditor
+                title="Upstairs Bedroom"
+                addLabel="Add bedroom"
+                notes={movingFrom.upstairsBedroomNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingFrom((p) => ({ ...p, upstairsBedroomNotes: notes }))}
+              />
+
+              <NotesEditor
+                title="Downstairs Bedroom"
+                addLabel="Add bedroom"
+                notes={movingFrom.downstairsBedroomNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingFrom((p) => ({ ...p, downstairsBedroomNotes: notes }))}
+              />
+
+              <NotesEditor
+                title="Upstairs Bathroom"
+                addLabel="Add bathroom"
+                notes={movingFrom.upstairsBathroomNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingFrom((p) => ({ ...p, upstairsBathroomNotes: notes }))}
+              />
+
+              <NotesEditor
+                title="Downstairs Bathroom"
+                addLabel="Add bathroom"
+                notes={movingFrom.downstairsBathroomNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingFrom((p) => ({ ...p, downstairsBathroomNotes: notes }))}
+              />
+
               <div className="space-y-3">
+                <FeatureRow
+                  label="Kitchen"
+                  value={movingFrom.kitchen}
+                  notes={movingFrom.kitchenNotes}
+                  notesLabel="Kitchen Notes"
+                  disabled={isBusy}
+                  onValueChange={(v) => setMovingFrom((p) => ({ ...p, kitchen: v }))}
+                  onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, kitchenNotes: notes }))}
+                />
+                <FeatureRow
+                  label="Utility Room"
+                  value={movingFrom.utilityRoom}
+                  notes={movingFrom.utilityRoomNotes}
+                  notesLabel="Utility Room Notes"
+                  disabled={isBusy}
+                  onValueChange={(v) => setMovingFrom((p) => ({ ...p, utilityRoom: v }))}
+                  onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, utilityRoomNotes: notes }))}
+                />
+                <FeatureRow
+                  label="Conservatory"
+                  value={movingFrom.conservatory}
+                  notes={movingFrom.conservatoryNotes}
+                  notesLabel="Conservatory Notes"
+                  disabled={isBusy}
+                  onValueChange={(v) => setMovingFrom((p) => ({ ...p, conservatory: v }))}
+                  onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, conservatoryNotes: notes }))}
+                />
+                <FeatureRow
+                  label="Downstairs Hallway"
+                  value={movingFrom.downstairsHallway}
+                  notes={movingFrom.downstairsHallwayNotes}
+                  notesLabel="Downstairs Hallway Notes"
+                  disabled={isBusy}
+                  onValueChange={(v) => setMovingFrom((p) => ({ ...p, downstairsHallway: v }))}
+                  onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, downstairsHallwayNotes: notes }))}
+                />
+                <FeatureRow
+                  label="Upstairs Hallway"
+                  value={movingFrom.upstairsHallway}
+                  notes={movingFrom.upstairsHallwayNotes}
+                  notesLabel="Upstairs Hallway Notes"
+                  disabled={isBusy}
+                  onValueChange={(v) => setMovingFrom((p) => ({ ...p, upstairsHallway: v }))}
+                  onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, upstairsHallwayNotes: notes }))}
+                />
                 <FeatureRow
                   label="Garage"
                   value={movingFrom.garage}
@@ -972,9 +1415,17 @@ export default function NewDocumentModal({
                   onNotesChange={(notes) => setMovingFrom((p) => ({ ...p, dismantlingNotes: notes }))}
                 />
               </div>
+
+              <CustomNotesEditor
+                notes={movingFrom.customNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingFrom((p) => ({ ...p, customNotes: notes }))}
+              />
             </div>
+            )}
 
             {/* 3. Moving To */}
+            {(step === 2 || step === 4) && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-white border-b border-white/10 pb-2">
                 Moving To
@@ -982,7 +1433,7 @@ export default function NewDocumentModal({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label htmlFor="movingToAddress" className="block text-sm font-medium mb-1">
-                    Moving To Address
+                    Moving To
                   </label>
                   <textarea
                     id="movingToAddress"
@@ -992,8 +1443,6 @@ export default function NewDocumentModal({
                     onChange={(e) => setMovingTo((p) => ({ ...p, address: e.target.value }))}
                     className={`${inputClass} resize-none`}
                   />
-                  <label htmlFor="movingToPostcode" className="block text-sm font-medium mt-3 mb-1">Delivery Postcode</label>
-                  <input id="movingToPostcode" type="text" value={movingTo.postcode || ''} disabled={isBusy} onChange={(e) => setMovingTo((p) => ({ ...p, postcode: e.target.value }))} className={inputClass} />
                 </div>
                 <div>
                   <label htmlFor="movingToBedrooms" className="block text-sm font-medium mb-1">
@@ -1013,46 +1462,91 @@ export default function NewDocumentModal({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <RadioField
+                  label="Property Type"
+                  value={movingTo.propertyType}
+                  options={PROPERTY_TYPE_OPTIONS}
+                  disabled={isBusy}
+                  onChange={(v) => setMovingTo((p) => ({ ...p, propertyType: v }))}
+                />
+                {movingTo.propertyType === 'house' && (
+                  <div>
+                    <label htmlFor="movingToStoreys" className="block text-sm font-medium mb-1">
+                      Number of Storeys
+                    </label>
+                    <input
+                      id="movingToStoreys"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={movingTo.storeys}
+                      disabled={isBusy}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      onChange={(e) => setMovingTo((p) => ({ ...p, storeys: e.target.value }))}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+                {movingTo.propertyType === 'flat' && (
+                  <>
+                    <div>
+                      <label htmlFor="movingToFloor" className="block text-sm font-medium mb-1">
+                        Which Floor
+                      </label>
+                      <input
+                        id="movingToFloor"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={movingTo.floor}
+                        disabled={isBusy}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        onChange={(e) => setMovingTo((p) => ({ ...p, floor: e.target.value }))}
+                        className={inputClass}
+                      />
+                    </div>
+                    <YesNoField
+                      label="Lift"
+                      value={movingTo.lift}
+                      disabled={isBusy}
+                      onChange={(v) => setMovingTo((p) => ({ ...p, lift: v }))}
+                    />
+                  </>
+                )}
+              </div>
+
               <div className="space-y-3">
                 <FeatureRow
                   label="Garage"
                   value={movingTo.garage}
-                  notes={movingTo.garageNotes}
-                  notesLabel="Garage Notes"
                   disabled={isBusy}
                   onValueChange={(v) => setMovingTo((p) => ({ ...p, garage: v }))}
-                  onNotesChange={(notes) => setMovingTo((p) => ({ ...p, garageNotes: notes }))}
                 />
                 <FeatureRow
                   label="Garden Shed"
                   value={movingTo.gardenShed}
-                  notes={movingTo.gardenShedNotes}
-                  notesLabel="Garden Shed Notes"
                   disabled={isBusy}
                   onValueChange={(v) => setMovingTo((p) => ({ ...p, gardenShed: v }))}
-                  onNotesChange={(notes) => setMovingTo((p) => ({ ...p, gardenShedNotes: notes }))}
-                />
-                <FeatureRow
-                  label="Garden Furniture"
-                  value={movingTo.gardenFurniture}
-                  notes={movingTo.gardenFurnitureNotes}
-                  notesLabel="Garden Furniture Notes"
-                  disabled={isBusy}
-                  onValueChange={(v) => setMovingTo((p) => ({ ...p, gardenFurniture: v }))}
-                  onNotesChange={(notes) => setMovingTo((p) => ({ ...p, gardenFurnitureNotes: notes }))}
                 />
                 <FeatureRow
                   label="Assembly Required"
                   value={movingTo.assemblyRequired}
-                  notes={movingTo.assemblyNotes}
-                  notesLabel="Assembly Notes"
                   disabled={isBusy}
                   onValueChange={(v) => setMovingTo((p) => ({ ...p, assemblyRequired: v }))}
-                  onNotesChange={(notes) => setMovingTo((p) => ({ ...p, assemblyNotes: notes }))}
                 />
               </div>
-            </div>
 
+              <CustomNotesEditor
+                notes={movingTo.customNotes}
+                disabled={isBusy}
+                onChange={(notes) => setMovingTo((p) => ({ ...p, customNotes: notes }))}
+              />
+            </div>
+            )}
+
+            {(step === 3 || step === 4) && (
+            <>
             <fieldset disabled={isBusy} className="space-y-4">
               <legend className="text-lg font-semibold text-white border-b border-white/10 pb-2 w-full">What's Included</legend>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1186,6 +1680,8 @@ export default function NewDocumentModal({
                 />
               </div>
             </div>
+            </>
+            )}
 
             {/* 6. Fixed company details */}
 
@@ -1199,14 +1695,6 @@ export default function NewDocumentModal({
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-white/10">
               <button
                 type="button"
-                disabled={isBusy}
-                onClick={onClose}
-                className="px-4 py-2 rounded-2xl text-sm hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
                 disabled={isBusy || quoteNumberLoading}
                 onClick={() => saveRemovalsQuotation('draft')}
                 className="px-4 py-2 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1214,14 +1702,45 @@ export default function NewDocumentModal({
                 {savingMode === 'draft' && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Draft
               </button>
-              <button
-                type="submit"
-                disabled={isBusy || quoteNumberLoading}
-                className="px-4 py-2 rounded-2xl text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingMode === 'issued' && <Loader2 className="w-4 h-4 animate-spin" />}
-                Issue Quotation
-              </button>
+              {step < REMOVAL_STEPS.length - 1 && (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => setStep(REMOVAL_STEPS.length - 1)}
+                  className="px-4 py-2 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Preview
+                </button>
+              )}
+              {step > 0 && (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => setStep(step - 1)}
+                  className="px-4 py-2 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+              )}
+              {step < REMOVAL_STEPS.length - 1 ? (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => setStep(step + 1)}
+                  className="px-4 py-2 rounded-2xl text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isBusy || quoteNumberLoading}
+                  className="px-4 py-2 rounded-2xl text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingMode === 'issued' && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Issue Quotation
+                </button>
+              )}
             </div>
           </form>
         </div>

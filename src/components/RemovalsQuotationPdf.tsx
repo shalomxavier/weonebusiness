@@ -59,10 +59,10 @@ const date = (input?: string) => {
 function ServiceIcon({ service }: { service: keyof typeof INCLUDED_SERVICE_DETAILS }) {
   return (
     <Svg width={30} height={30} viewBox="0 0 32 32">
-      {service === 'transportation' ? <>
+      {service === 'safeTransportation' ? <>
         <Path d="M2 7H20V23H2Z M20 13H26L30 19V23H20 M22 15H25L28 19H22Z" stroke={NAVY} strokeWidth={1.5} fill="none" />
         <Path d="M7 21A3 3 0 1 0 7 27A3 3 0 1 0 7 21 M25 21A3 3 0 1 0 25 27A3 3 0 1 0 25 21" fill="#FFFFFF" stroke={NAVY} strokeWidth={1.5} />
-      </> : service === 'loading' ? <>
+      </> : service === 'loadingUnloading' ? <>
         <Path d="M5 9L16 3L27 9V23L16 29L5 23Z M5 9L16 15L27 9 M16 15V29 M10 6L22 12" stroke={NAVY} strokeWidth={1.5} fill="none" />
       </> : <>
         <Path d="M2 14L16 3L30 14 M6 12V28H26V12" stroke={NAVY} strokeWidth={1.5} fill="none" />
