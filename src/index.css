@@ -128,3 +128,33 @@ input[type=number] {
   .delay-700 { animation-delay: 700ms; }
   .delay-800 { animation-delay: 800ms; }
 }
+
+@keyframes wizardSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes wizardSlideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.wizard-slide-right {
+  animation: wizardSlideInRight 0.3s ease-out;
+}
+
+.wizard-slide-left {
+  animation: wizardSlideInLeft 0.3s ease-out;
+}

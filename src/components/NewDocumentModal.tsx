@@ -736,6 +736,12 @@ export default function NewDocumentModal({
   const [savingMode, setSavingMode] = useState<'draft' | 'issued' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [step, setStep] = useState(0)
+  const [stepDirection, setStepDirection] = useState<'forward' | 'back'>('forward')
+
+  const goToStep = (next: number) => {
+    setStepDirection(next > step ? 'forward' : 'back')
+    setStep(next)
+  }
 
   const activeQuotationType = editQuotation ? 'removals' : quotationType
   const isRemovalsQuotation = docType === 'quotation' && activeQuotationType === 'removals'
@@ -1058,7 +1064,7 @@ export default function NewDocumentModal({
                   <button
                     key={label}
                     type="button"
-                    onClick={() => setStep(index)}
+                    onClick={() => goToStep(index)}
                     aria-label={label}
                     className={`h-3 rounded-full transition-all ${index === step ? 'w-8 bg-purple-500' : 'w-3 bg-white/20 hover:bg-white/40'}`}
                   />
@@ -1082,6 +1088,7 @@ export default function NewDocumentModal({
               </span>
             </div>
 
+            <div key={step} className={`space-y-8 ${stepDirection === 'forward' ? 'wizard-slide-right' : 'wizard-slide-left'}`}>
             {(step === 0 || step === 4) && !editQuotation && activeQuotationType && (
               <div>
                 <label className="block text-sm font-medium mb-1">Quotation Type</label>
@@ -1682,6 +1689,7 @@ export default function NewDocumentModal({
             </div>
             </>
             )}
+            </div>
 
             {/* 6. Fixed company details */}
 
@@ -1706,7 +1714,7 @@ export default function NewDocumentModal({
                 <button
                   type="button"
                   disabled={isBusy}
-                  onClick={() => setStep(REMOVAL_STEPS.length - 1)}
+                  onClick={() => goToStep(REMOVAL_STEPS.length - 1)}
                   className="px-4 py-2 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Preview
@@ -1716,7 +1724,7 @@ export default function NewDocumentModal({
                 <button
                   type="button"
                   disabled={isBusy}
-                  onClick={() => setStep(step - 1)}
+                  onClick={() => goToStep(step - 1)}
                   className="px-4 py-2 rounded-2xl text-sm bg-white/10 hover:bg-white/15 border border-white/10 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
@@ -1726,7 +1734,7 @@ export default function NewDocumentModal({
                 <button
                   type="button"
                   disabled={isBusy}
-                  onClick={() => setStep(step + 1)}
+                  onClick={() => goToStep(step + 1)}
                   className="px-4 py-2 rounded-2xl text-sm bg-purple-600 hover:bg-purple-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
