@@ -1,9 +1,12 @@
-import { ReactElement } from 'react'
+import { ReactElement, useEffect } from 'react'
 import { usePDF } from '@react-pdf/renderer'
 import { Loader2, X } from 'lucide-react'
 
 function PreviewBody({ document, title }: { document: ReactElement; title: string }) {
-  const [instance] = usePDF({ document })
+  const [instance, updateInstance] = usePDF({ document })
+  useEffect(() => {
+    updateInstance(document)
+  }, [document, updateInstance])
   if (instance.loading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-purple-400" /></div>
   if (instance.error || !instance.url) return <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-400">Failed to load the document preview.</div>
   return <iframe src={`${instance.url}#toolbar=0&navpanes=0`} title={title} className="h-full w-full rounded-xl border-0" />
